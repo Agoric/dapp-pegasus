@@ -1,43 +1,32 @@
-# Encouragement Dapp
+One Agoric IBC Port, many Agoric IBC Channels connected to other chains
 
-The Encouragement Dapp is the simplest [Agoric
-Dapp](https://agoric.com/documentation/dapps/). It
-demonstrates the three important parts of
-a dapp and how they should be connected:
-1. the browser UI (the frontend)
-2. the API server (the backend)
-3. the on-chain contract
+One Agoric IBC Channel, many remote denoms ("denomination codes")
 
-This dapp starts a local
-blockchain on your computer, and deploys a basic contract to that
-blockchain. It does not currently deploy or connect to the Agoric testnet.
+Each remote denom has exactly one local Agoric issuer
 
-This particular dapp UI is written in vanilla JS for simplicity (as
-opposed to using a framework).
+First, open a network connection (such as dIBC), then:
 
-## Functionality
+This contract:
+1. Root on IBC, shadow on Agoric:
+  a. for a given network connection, register the remote denom (computed from IBC address),
+  b. create a backing issuer to mint/burn on Agoric
+  c. register that issuer with the Board, and allow wallets to install the issuer
+  d. internal mapping of channel receiver to peg, and sent brand to peg
 
-The Encouragement Dapp:
+2. Root on Agoric, shadow on IBC:
+  a. for a given network connection, register an Agoric issuer
+  b. generate a name for the IBC denom(ination) `${ibcPortId}/${ibcChannelId}/${nonce}`
+  c. create a "backing purse", etc.
+  d. handle receiveFungible unescrow, expose sendFungible escrow, then to network
+  
+Contract Public API:
 
-1. Subscribes to contract notifications via the API server
-2. Accesses your Agoric wallet, and
-3. At the user's request, either:
+contract.sendFungible(payment, destAddress)
+contract.sendFungibleVia(payment, destAddress, viaNetworkAddress)
+contract.pegIssuer(connection, agoricIssuer)
+contract.pegRemoteDenom(connection, 'uatom')
 
-    1. requests some free encouragement, or
-    2. proposes (via the user's wallet and Zoe) exchanging a Tip for
-       some Encouragement (the tip is not yet sent to the Zoe
-       contract, but you will still get some encouragement.)
+Internal API for each Peg:
 
-To learn more about how to build Agoric Dapps, please see the [Dapp Guide](https://agoric.com/documentation/dapps/).
-
-Here's the interface:
-
-![Screenshot Before Encouragement](readme-assets/before.png)
-
-and after we click the "Encourage Me!" button:
-
-![Screenshot After Encouragement](readme-assets/after.png)
-
-## TODO
-
-Things we need to fix are listed in [the Github issues for this repository](https://github.com/Agoric/dapp-encouragement/issues).
+peg.receiveFungible(amount, denom, destBoardEntryId)
+peg.sendFungible(payment, destAddress)

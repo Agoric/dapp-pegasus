@@ -6,25 +6,25 @@ import { makeMint } from '../../core/mint';
 
 // This implementation may be out of date
 
-// Creates a local assay that locally represents a remotely issued
+// Creates a local issuer that locally represents a remotely issued
 // currency. Returns a promise for a peg object that asynchonously
 // converts between the two. The local currency is synchronously
 // transferable locally.
-function makePeg(E, remoteAssayP, makeMintKeeper, makeUnitOps = makeNatDescOps) {
-  const remoteLabelP = E(remoteAssayP).getLabel();
+function makePeg(E, remoteIssuerP, makeMintKeeper, makeUnitOps = makeNatDescOps) {
+  const remoteLabelP = E(remoteIssuerP).getLabel();
 
   // The remoteLabel is a local copy of the remote pass-by-copy
-  // label. It has a presence of the remote assay and a copy of the
+  // label. It has a presence of the remote issuer and a copy of the
   // description.
   return Promise.resolve(remoteLabelP).then(remoteLabel => {
     // Retaining remote currency deposits it in here.
     // Redeeming local currency withdraws remote from here.
-    const backingPurseP = E(remoteAssayP).makeEmptyPurse('backing');
+    const backingPurseP = E(remoteIssuerP).makeEmptyPurse('backing');
 
     const { description } = remoteLabel;
     const localMint = makeMint(description, makeMintKeeper, makeUnitOps);
-    const localAssay = localMint.getAssay();
-    const localLabel = localAssay.getLabel();
+    const localIssuer = localMint.getIssuer();
+    const localLabel = localIssuer.getLabel();
 
     function localUnitsOf(remoteUnits) {
       return harden({
@@ -41,12 +41,12 @@ function makePeg(E, remoteAssayP, makeMintKeeper, makeUnitOps = makeNatDescOps) 
     }
 
     return harden({
-      getLocalAssay() {
-        return localAssay;
+      getLocalIssuer() {
+        return localIssuer;
       },
 
-      getRemoteAssay() {
-        return remoteAssayP;
+      getRemoteIssuer() {
+        return remoteIssuerP;
       },
 
       retainAll(remotePaymentP, name = 'backed') {
@@ -60,7 +60,7 @@ function makePeg(E, remoteAssayP, makeMintKeeper, makeUnitOps = makeNatDescOps) 
       },
 
       redeemAll(localPayment, name = 'redeemed') {
-        return localAssay
+        return localIssuer
           .burnAll(localPayment)
           .then(localUnits =>
             E(backingPurseP).withdraw(remoteUnitsOf(localUnits), name),
