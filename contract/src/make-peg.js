@@ -35,6 +35,14 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  */
 
 /**
+ * @typedef {Object} FungibleTransferPacket
+ * @property {string} amount The extent of the amount
+ * @property {Denom} denomination The denomination of the amount
+ * @property {string} sender The sender address
+ * @property {DepositAddress} receiver The receiver deposit address
+ */
+
+/**
  * @typedef {Object} TransferResult
  * @property {boolean} success True if the transfer was successful
  * @property {any} [error] The description of the error
@@ -134,6 +142,12 @@ const makePeg = () => {
         brand: localBrand,
       } = produceIssuer(denomUri, amountMathKind);
 
+      /**
+       * Convert an inbound packet to a local amount.
+       *
+       * @param {FungibleTransferPacket} packet
+       * @returns {Amount}
+       */
       function packetToLocalAmount(packet) {
         // packet.amount is a string in JSON.
         const floatExtent = Number(packet.amount);
@@ -147,7 +161,14 @@ const makePeg = () => {
         });
       }
 
-      // TODO: Find the proper value of "sender" if there is one.
+      /**
+       * Convert the amount to a packet to send.
+       *
+       * @param {Amount} amount
+       * @param {DepositAddress} depositAddress
+       * @param {'FIXME:sender'} sender
+       * @returns {FungibleTransferPacket}
+       */
       function localAmountToPacket(amount, depositAddress, sender) {
         const { brand, extent } = amount;
         assert(
@@ -211,6 +232,7 @@ const makePeg = () => {
 
       /** @type {PegDescriptor} */
       const pegDescriptor = harden({
+        mint: localMint, // FIXME!!!!!  Don't do this!
         denomUri,
         endpoint,
         issuer: localIssuer,
