@@ -5,7 +5,8 @@
 
 import { assert, details, q } from '@agoric/assert';
 import produceIssuer from '@agoric/ertp';
-// import makeStore from '@agoric/store';
+import makeStore from '@agoric/store';
+import makeWeakStore from '@agoric/weak-store';
 import { E } from '@agoric/eventual-send';
 import Nat from '@agoric/nat';
 import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/multiaddr';
@@ -18,8 +19,22 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {import('@agoric/ertp/src/issuer').Brand} Brand
  * @typedef {import('@agoric/ertp/src/issuer').Issuer} Issuer
  * @typedef {import('@agoric/ertp/src/issuer').Payment} Payment
+ * @typedef {import('@agoric/ertp/src/issuer').PaymentP} PaymentP
+ * @typedef {import('@agoric/swingset-vat/src/vats/network').Bytes} Bytes
+ * @typedef {import('@agoric/swingset-vat/src/vats/network').Data} Data
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Connection} Connection
+ * @typedef {import('@agoric/swingset-vat/src/vats/network').ConnectionHandler} ConnectionHandler
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Endpoint} Endpoint
+ */
+
+/**
+ * @template K,V
+ * @typedef {import('@agoric/store').Store<K,V>} Store<K,V>
+ */
+
+/**
+ * @template K,V
+ * @typedef {import('@agoric/weak-store').WeakStore<K,V>} WeakStore<K,V>
  */
 
 /**
@@ -30,6 +45,7 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  *
  * @typedef {Object} PegDescriptor
  * @property {Issuer} issuer
+ * @property {Brand} brand
  * @property {DenomUri} denomUri
  * @property {Endpoint} endpoint
  */
@@ -51,7 +67,12 @@ const DEFAULT_PROTOCOL = 'ics20-1';
 
 /**
  * @typedef {Object} Courier
- * @property {(payment: Payment, depositAddress: DepositAddress) => Promise<TransferResult>} transfer
+ * @property {(payment: PaymentP, depositAddress: DepositAddress) => Promise<TransferResult>} transfer
+ * Successive transfers are not guaranteed to be processed in the order in which they were sent.
+ */
+
+/**
+ * @typedef {(packet: FungibleTransferPacket) => Promise<unknown>} Receiver
  */
 
 /**
@@ -89,21 +110,67 @@ async function getDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
 
 /**
  * Create the public facet of the pegging contract.
+ *
+ * @param {{ getValue: (id: string) => any }} board
  */
-const makePeg = () => {
+const makePegasus = board => {
+  /**
+   * @type {WeakStore<Connection, Store<DenomUri, Receiver>>}
+   */
+  const connectionsToDenomReceivers = makeWeakStore('Connection');
+
   return harden({
     getDenomUri,
     /**
+     * Return a handler that can be used with the Network API.
+     * @returns {ConnectionHandler}
+     */
+    makePegConnectionHandler() {
+      /**
+       * @type {Store<DenomUri, Receiver>}
+       */
+      const denomUriToReceiver = makeStore('Denomination');
+      return {
+        async onOpen(c) {
+          // Register C with the table of Peg receivers.
+          connectionsToDenomReceivers.init(c, denomUriToReceiver);
+        },
+        async onReceive(c, packetBytes) {
+          // Dispatch the packet to the appropriate Peg for this connection.
+          /**
+           * @type {FungibleTransferPacket}
+           */
+          const packet = JSON.parse(packetBytes);
+          const denomUri = `ics20-1:${packet.denomination}`;
+          const receiver = denomUriToReceiver.get(denomUri);
+          return receiver(packet)
+            .then(_ => {
+              const ack = { success: true };
+              return JSON.stringify(ack);
+            })
+            .catch(error => {
+              // On failure, just return the stringified error.
+              const nack = { success: false, error: `${error}` };
+              return JSON.stringify(nack);
+            });
+        },
+        async onClose(c) {
+          // Unregister C.  Pending transfers will be rejected.
+          connectionsToDenomReceivers.delete(c);
+        },
+      };
+    },
+    /**
      * Peg a remote asset over a network connection.
      *
-     * @param {Connection|PromiseLike<Connection>} c The network connection (IBC channel) to communicate over
+     * @param {Connection|PromiseLike<Connection>} connectionP The network connection (IBC channel) to communicate over
      * @param {Denom} remoteDenom Remote denomination
      * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged extents
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
      * @returns {Promise<[Courier,PegDescriptor]>}
      */
     async pegRemote(
-      c,
+      connectionP,
       remoteDenom,
       amountMathKind = DEFAULT_AMOUNT_MATH_KIND,
       protocol = DEFAULT_PROTOCOL,
@@ -125,7 +192,7 @@ const makePeg = () => {
       );
 
       // Find our data elements.
-      const endpoint = await E(c).getLocalAddress();
+      const endpoint = await E(connectionP).getLocalAddress();
       const denomUri = await getDenomUri(endpoint, remoteDenom, protocol);
 
       const uriMatch = denomUri.match(/^ics20-1:(.*)$/);
@@ -186,15 +253,43 @@ const makePeg = () => {
         });
       }
 
+      const c = await connectionP;
+      assert(
+        connectionsToDenomReceivers.has(c),
+        details`The connection must use .createPegConnectionHandler()`,
+      );
+
+      const denomUriToReceiver = connectionsToDenomReceivers.get(c);
+
       /**
-       * The Courier transfers a payment over the network.
+       * Receive a packet, mint some shadow rights, and send to the depositAddress.
+       * @type {Receiver}
+       */
+      const receiver = async packet => {
+        // Look up the deposit facet for this board address, if there is one.
+        const depositAddress = packet.receiver;
+        const localAmount = packetToLocalAmount(packet);
+        const depositFacet = await E(board).getValue(depositAddress);
+
+        // Mint a local shadow right.
+        const payment = localMint.mintPayment(localAmount);
+
+        // Send to the deposit facet, if we can.
+        return E(depositFacet).receive(payment);
+      };
+
+      /* Register the receiver with the denomUri. */
+      denomUriToReceiver.init(denomUri, receiver);
+
+      /**
+       * The Courier transfers an outbound payment over the network.
        *
        * @type {Courier}
        */
       const courier = harden({
-        async transfer(payment, depositAddress) {
+        async transfer(paymentP, depositAddress) {
           // Burn the payment, and create a packet to send.
-          const amount = await localIssuer.burn(payment);
+          const amount = await localIssuer.burn(paymentP);
           const packet = localAmountToPacket(
             amount,
             depositAddress,
@@ -232,9 +327,9 @@ const makePeg = () => {
 
       /** @type {PegDescriptor} */
       const pegDescriptor = harden({
-        mint: localMint, // FIXME!!!!!  Don't do this!
         denomUri,
         endpoint,
+        brand: localBrand,
         issuer: localIssuer,
       });
       return Promise.resolve([courier, pegDescriptor]);
@@ -290,4 +385,5 @@ const makePeg = () => {
   });
 };
 
-export default makePeg;
+harden(makePegasus);
+export default makePegasus;
