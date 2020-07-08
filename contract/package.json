@@ -4,7 +4,7 @@
   "private": true,
   "description": "Contract for the Network Pegging Agoric Dapp",
   "scripts": {
-    "build": "exit 0",
+    "build": "rm -f src/*.d.ts && tsc -p jsconfig.json",
     "test": "tape -r esm 'test/**/*.js' | tap-spec",
     "lint": "eslint '**/*.{js,jsx}'",
     "lint-fix": "eslint --fix '**/*.{js,jsx}'",

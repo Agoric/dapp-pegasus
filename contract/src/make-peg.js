@@ -1,74 +1,163 @@
-/* eslint-disable */
+// @ts-check
 
-import harden from '@agoric/harden';
-import { makeNatDescOps } from '../../core/config/natDescOps';
-import { makeMint } from '../../core/mint';
+// eslint-disable-next-line spaced-comment
+/// <reference types="ses" />
 
-// This implementation may be out of date
+import { assert, details } from '@agoric/assert';
+import produceIssuer from '@agoric/ertp';
+import makeStore from '@agoric/store';
+import { E } from '@agoric/eventual-send';
+import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/multiaddr';
 
-// Creates a local issuer that locally represents a remotely issued
-// currency. Returns a promise for a peg object that asynchonously
-// converts between the two. The local currency is synchronously
-// transferable locally.
-function makePeg(E, remoteIssuerP, makeMintKeeper, makeUnitOps = makeNatDescOps) {
-  const remoteLabelP = E(remoteIssuerP).getLabel();
+const DEFAULT_AMOUNT_MATH_KIND = 'nat';
+const DEFAULT_PROTOCOL = 'ics20-1';
 
-  // The remoteLabel is a local copy of the remote pass-by-copy
-  // label. It has a presence of the remote issuer and a copy of the
-  // description.
-  return Promise.resolve(remoteLabelP).then(remoteLabel => {
-    // Retaining remote currency deposits it in here.
-    // Redeeming local currency withdraws remote from here.
-    const backingPurseP = E(remoteIssuerP).makeEmptyPurse('backing');
+/**
+ * @typedef {import('@agoric/ertp/src/issuer').Amount} Amount
+ * @typedef {import('@agoric/ertp/src/issuer').Brand} Brand
+ * @typedef {import('@agoric/ertp/src/issuer').Issuer} Issuer
+ * @typedef {import('@agoric/ertp/src/issuer').Payment} Payment
+ * @typedef {import('@agoric/swingset-vat/src/vats/network').Connection} Connection
+ * @typedef {import('@agoric/swingset-vat/src/vats/network').Endpoint} Endpoint
+ */
 
-    const { description } = remoteLabel;
-    const localMint = makeMint(description, makeMintKeeper, makeUnitOps);
-    const localIssuer = localMint.getIssuer();
-    const localLabel = localIssuer.getLabel();
+/**
+ * @typedef {string} DenomUri
+ * @typedef {string} Denom
+ * @typedef {string} DepositAddress
+ * @typedef {string} TransferProtocol
+ *
+ * @typedef {Object} PegDescriptor
+ * @property {Issuer} issuer
+ * @property {DenomUri} denomUri
+ * @property {Endpoint} endpoint
+ */
 
-    function localUnitsOf(remoteUnits) {
-      return harden({
-        label: localLabel,
-        extent: remoteUnits.extent,
-      });
+/**
+ * @typedef {Object} Courier
+ * @property {(payment: Payment, depositAddress: DepositAddress) => Promise<void>} transfer
+ */
+
+/**
+ * Get the denomination combined with the network address.
+ *
+ * @param {Endpoint | PromiseLike<Endpoint>} endpointP network connection address
+ * @param {Denom} denom denomination
+ * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] the protocol to use
+ * @returns {Promise<string>} denomination URI scoped to endpoint
+ */
+const getDenomUri = async (endpointP, denom, protocol = DEFAULT_PROTOCOL) =>
+  E.when(endpointP, endpoint => {
+    switch (protocol) {
+      case 'ics20-1': {
+        return E.when(endpointP, endpoint => {
+          // TODO: Deconstruct IBC endpoints to use ICS-20 conventions.
+          // IBC endpoint: `/ibc-hop/gaia/ibc-port/transfer/ordered/ics20-1/ibc-channel/chtedite`
+          const pairs = parseMultiaddr(endpoint);
+
+          const protoPort = pairs.find(([proto]) => proto === 'ibc-port');
+          assert(protoPort, details`Cannot find IBC port in ${endpoint}`);
+
+          const protoChannel = pairs.find(([proto]) => proto === 'ibc-channel');
+          assert(protoChannel, details`Cannot find IBC channel in ${endpoint}`);
+
+          const port = protoPort[1];
+          const channel = protoChannel[1];
+          return `${protocol}:${port}/${channel}/${denom}`;
+        });
+      }
+
+      default:
+        assert.fail(details`Invalid denomination scopeType ${scopeType}`);
     }
-
-    function remoteUnitsOf(localUnits) {
-      return harden({
-        label: remoteLabel,
-        extent: localUnits.extent,
-      });
-    }
-
-    return harden({
-      getLocalIssuer() {
-        return localIssuer;
-      },
-
-      getRemoteIssuer() {
-        return remoteIssuerP;
-      },
-
-      retainAll(remotePaymentP, name = 'backed') {
-        return E(backingPurseP)
-          .depositAll(remotePaymentP)
-          .then(remoteUnits =>
-            localMint
-              .mint(localUnitsOf(remoteUnits), `${name} purse`)
-              .withdrawAll(name),
-          );
-      },
-
-      redeemAll(localPayment, name = 'redeemed') {
-        return localIssuer
-          .burnAll(localPayment)
-          .then(localUnits =>
-            E(backingPurseP).withdraw(remoteUnitsOf(localUnits), name),
-          );
-      },
-    });
   });
-}
-harden(makePeg);
 
-export { makePeg };
+/**
+ * Create the public facet of the pegging contract.
+ */
+const makePeg = () => {
+  return harden({
+    getDenomUri,
+    /**
+     * Peg a remote asset over a network connection.
+     *
+     * @param {Connection} c The network connection (IBC channel) to communicate over
+     * @param {Denom} denom Remote denomination
+     * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged extents
+     * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
+     * @returns {Promise<[Courier,PegDescriptor]>}
+     */
+    async pegRemote(
+      c,
+      denom,
+      amountMathKind = DEFAULT_AMOUNT_MATH_KIND,
+      protocol = DEFAULT_PROTOCOL,
+    ) {
+      /** @type {Courier} */
+      const courier = harden({
+        transfer(payment, depositAddress) {
+          // TODO
+          return Promise.resolve();
+        },
+      });
+      /** @type {PegDescriptor} */
+      const pegDescriptor = harden({
+        // TODO
+        denomUri,
+        endpoint,
+        issuer,
+      });
+      return Promise.resolve([courier, pegDescriptor]);
+    },
+
+    /**
+     * Peg a local asset over a network connection.
+     *
+     * @param {Promise<Connection>|Connection} c The network connection (IBC channel) to communicate over
+     * @param {Issuer} issuer Local ERTP issuer whose assets should be pegged to c
+     * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak on the connection
+     * @returns {Promise<[Courier,PegDescriptor]>}
+     */
+    pegLocal(c, issuer, protocol = DEFAULT_PROTOCOL) {
+      /** @type {Courier} */
+      const courier = harden({
+        transfer(payment, depositAddress) {
+          // TODO
+          return Promise.resolve();
+        },
+      });
+      /** @type {PegDescriptor} */
+      const pegDescriptor = harden({
+        // TODO
+        denomUri,
+        endpoint,
+        issuer,
+      });
+      return Promise.resolve([courier, pegDescriptor]);
+    },
+
+    /**
+     * Look up a peg by brand.
+     *
+     * @param {Brand} brand
+     * @returns {PegDescriptor?}
+     */
+    getPegByBrand(brand) {
+      // TODO
+      return undefined;
+    },
+
+    /**
+     * Look up pegs by endpoint.
+     *
+     * @param {Endpoint} endpoint
+     * @returns {PegDescriptor[]}
+     */
+    getPegByEndpoint(endpoint) {
+      // TODO
+      return harden([]);
+    },
+  });
+};
+
+export default makePeg;
