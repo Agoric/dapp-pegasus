@@ -1,12 +1,13 @@
 // @ts-check
 
 // eslint-disable-next-line spaced-comment
-/// <reference types="ses" />
+/// <reference types="ses"/>
 
-import { assert, details } from '@agoric/assert';
+import { assert, details, q } from '@agoric/assert';
 import produceIssuer from '@agoric/ertp';
-import makeStore from '@agoric/store';
+// import makeStore from '@agoric/store';
 import { E } from '@agoric/eventual-send';
+import Nat from '@agoric/nat';
 import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/multiaddr';
 
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';
@@ -34,14 +35,21 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  */
 
 /**
+ * @typedef {Object} TransferResult
+ * @property {boolean} success True if the transfer was successful
+ * @property {any} [error] The description of the error
+ * @property {Payment} [refund] The refund if the transfer is known to have failed
+ */
+
+/**
  * @typedef {Object} Courier
- * @property {(payment: Payment, depositAddress: DepositAddress) => Promise<void>} transfer
+ * @property {(payment: Payment, depositAddress: DepositAddress) => Promise<TransferResult>} transfer
  */
 
 /**
  * Get the denomination combined with the network address.
  *
- * @param {Endpoint | PromiseLike<Endpoint>} endpointP network connection address
+ * @param {Endpoint|PromiseLike<Endpoint>} endpointP network connection address
  * @param {Denom} denom denomination
  * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] the protocol to use
  * @returns {Promise<string>} denomination URI scoped to endpoint
@@ -50,7 +58,7 @@ async function getDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
   switch (protocol) {
     case 'ics20-1': {
       return E.when(endpointP, endpoint => {
-        // TODO: Deconstruct IBC endpoints to use ICS-20 conventions.
+        // Deconstruct IBC endpoints to use ICS-20 conventions.
         // IBC endpoint: `/ibc-hop/gaia/ibc-port/transfer/ordered/ics20-1/ibc-channel/chtedite`
         const pairs = parseMultiaddr(endpoint);
 
@@ -81,38 +89,131 @@ const makePeg = () => {
      * Peg a remote asset over a network connection.
      *
      * @param {Connection|PromiseLike<Connection>} c The network connection (IBC channel) to communicate over
-     * @param {Denom} denom Remote denomination
+     * @param {Denom} remoteDenom Remote denomination
      * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged extents
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
      * @returns {Promise<[Courier,PegDescriptor]>}
      */
     async pegRemote(
       c,
-      denom,
+      remoteDenom,
       amountMathKind = DEFAULT_AMOUNT_MATH_KIND,
       protocol = DEFAULT_PROTOCOL,
     ) {
+      assert(
+        // TODO: Find the exact restrictions on Cosmos denoms.
+        remoteDenom.match(/^[a-z][a-z0-9]*$/),
+        details`Invalid ics20-1 remoteDenom ${q(
+          remoteDenom,
+        )}; need Cosmos denomination format`,
+      );
+      assert(
+        amountMathKind === 'nat',
+        details`Unimplemented amountMathKind ${q(amountMathKind)}; need "nat"`,
+      );
+      assert(
+        protocol === 'ics20-1',
+        details`Unimplemented protocol ${q(protocol)}; need "ics20-1"`,
+      );
+
       // Find our data elements.
       const endpoint = await E(c).getLocalAddress();
-      const denomUri = await getDenomUri(endpoint, denom, protocol);
+      const denomUri = await getDenomUri(endpoint, remoteDenom, protocol);
 
-      // FIGME: Here's where we left off!
-      const { issuer, mint } = produceIssuer(denomUri, amountMathKind);
+      const uriMatch = denomUri.match(/^ics20-1:(.*)$/);
+      assert(
+        uriMatch,
+        details`${denomUri} does not begin with ${q('ics20-1:')}`,
+      );
+      const prefixedDenom = uriMatch[1];
 
-      /** @type {Courier} */
+      // Get the issuer for the local erights corresponding to the remote values.
+      const {
+        issuer: localIssuer,
+        mint: localMint,
+        brand: localBrand,
+      } = produceIssuer(denomUri, amountMathKind);
+
+      function packetToLocalAmount(packet) {
+        // packet.amount is a string in JSON.
+        const floatExtent = Number(packet.amount);
+
+        // If we overflow, or don't have a number, throw an exception!
+        const extent = Nat(floatExtent);
+
+        return harden({
+          brand: localBrand,
+          extent,
+        });
+      }
+
+      // TODO: Find the proper value of "sender" if there is one.
+      function localAmountToPacket(amount, depositAddress, sender) {
+        const { brand, extent } = amount;
+        assert(
+          brand === localBrand,
+          details`Brand must our local issuer's, not ${q(brand)}`,
+        );
+        const stringExtent = String(Nat(extent));
+
+        // Generate the ics20-1 packet.
+        return harden({
+          amount: stringExtent,
+          denomination: prefixedDenom,
+          receiver: depositAddress,
+          sender,
+        });
+      }
+
+      /**
+       * The Courier transfers a payment over the network.
+       *
+       * @type {Courier}
+       */
       const courier = harden({
-        transfer(payment, depositAddress) {
-          // TODO
-          return Promise.resolve();
+        async transfer(payment, depositAddress) {
+          // Burn the payment, and create a packet to send.
+          const amount = await localIssuer.burn(payment);
+          const packet = localAmountToPacket(
+            amount,
+            depositAddress,
+            'FIXME:sender',
+          );
+          const packetBytes = JSON.stringify(packet);
+          return E(c)
+            .send(packetBytes)
+            .then(ack => {
+              // We got a response, so possible success.
+              const { success, error } = JSON.parse(ack);
+              if (!success) {
+                // Let the next catch handle this error.
+                throw error;
+              }
+              /** @type {TransferResult} */
+              const transferResult = {
+                success: true,
+              };
+              return transferResult;
+            })
+            .catch(error => {
+              // Not so bad, we can return a refund to the caller.
+              const refund = localMint.mintPayment(amount);
+              /** @type {TransferResult} */
+              const transferResult = {
+                success: false,
+                error,
+                refund,
+              };
+              return transferResult;
+            });
         },
       });
 
       /** @type {PegDescriptor} */
       const pegDescriptor = harden({
-        // TODO
         denomUri,
         endpoint,
-        issuer,
+        issuer: localIssuer,
       });
       return Promise.resolve([courier, pegDescriptor]);
     },

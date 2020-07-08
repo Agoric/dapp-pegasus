@@ -29,6 +29,7 @@
     "@agoric/eventual-send": "^0.5.0",
     "@agoric/harden": "0.0.4",
     "@agoric/ertp": "^0.5.2",
+    "@agoric/nat": "^2.0.1",
     "@agoric/notifier": "0.0.1",
     "@agoric/store": "^0.0.2",
     "@agoric/swingset-vat": "^0.6.0",
