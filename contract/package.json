@@ -31,6 +31,7 @@
     "@agoric/ertp": "^0.5.2",
     "@agoric/notifier": "0.0.1",
     "@agoric/store": "^0.0.2",
+    "@agoric/swingset-vat": "^0.6.0",
     "@agoric/zoe": "^0.3.0",
     "esm": "^3.2.5",
     "prettier": "^2.0.2"

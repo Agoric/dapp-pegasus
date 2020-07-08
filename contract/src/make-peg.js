@@ -46,31 +46,30 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] the protocol to use
  * @returns {Promise<string>} denomination URI scoped to endpoint
  */
-const getDenomUri = async (endpointP, denom, protocol = DEFAULT_PROTOCOL) =>
-  E.when(endpointP, endpoint => {
-    switch (protocol) {
-      case 'ics20-1': {
-        return E.when(endpointP, endpoint => {
-          // TODO: Deconstruct IBC endpoints to use ICS-20 conventions.
-          // IBC endpoint: `/ibc-hop/gaia/ibc-port/transfer/ordered/ics20-1/ibc-channel/chtedite`
-          const pairs = parseMultiaddr(endpoint);
+async function getDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
+  switch (protocol) {
+    case 'ics20-1': {
+      return E.when(endpointP, endpoint => {
+        // TODO: Deconstruct IBC endpoints to use ICS-20 conventions.
+        // IBC endpoint: `/ibc-hop/gaia/ibc-port/transfer/ordered/ics20-1/ibc-channel/chtedite`
+        const pairs = parseMultiaddr(endpoint);
 
-          const protoPort = pairs.find(([proto]) => proto === 'ibc-port');
-          assert(protoPort, details`Cannot find IBC port in ${endpoint}`);
+        const protoPort = pairs.find(([proto]) => proto === 'ibc-port');
+        assert(protoPort, details`Cannot find IBC port in ${endpoint}`);
 
-          const protoChannel = pairs.find(([proto]) => proto === 'ibc-channel');
-          assert(protoChannel, details`Cannot find IBC channel in ${endpoint}`);
+        const protoChannel = pairs.find(([proto]) => proto === 'ibc-channel');
+        assert(protoChannel, details`Cannot find IBC channel in ${endpoint}`);
 
-          const port = protoPort[1];
-          const channel = protoChannel[1];
-          return `${protocol}:${port}/${channel}/${denom}`;
-        });
-      }
-
-      default:
-        assert.fail(details`Invalid denomination scopeType ${scopeType}`);
+        const port = protoPort[1];
+        const channel = protoChannel[1];
+        return `${protocol}:${port}/${channel}/${denom}`;
+      });
     }
-  });
+
+    default:
+      throw assert.fail(details`Invalid denomination protocol ${protocol}`);
+  }
+}
 
 /**
  * Create the public facet of the pegging contract.
@@ -81,7 +80,7 @@ const makePeg = () => {
     /**
      * Peg a remote asset over a network connection.
      *
-     * @param {Connection} c The network connection (IBC channel) to communicate over
+     * @param {Connection|PromiseLike<Connection>} c The network connection (IBC channel) to communicate over
      * @param {Denom} denom Remote denomination
      * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged extents
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
@@ -93,6 +92,13 @@ const makePeg = () => {
       amountMathKind = DEFAULT_AMOUNT_MATH_KIND,
       protocol = DEFAULT_PROTOCOL,
     ) {
+      // Find our data elements.
+      const endpoint = await E(c).getLocalAddress();
+      const denomUri = await getDenomUri(endpoint, denom, protocol);
+
+      // FIGME: Here's where we left off!
+      const { issuer, mint } = produceIssuer(denomUri, amountMathKind);
+
       /** @type {Courier} */
       const courier = harden({
         transfer(payment, depositAddress) {
@@ -100,6 +106,7 @@ const makePeg = () => {
           return Promise.resolve();
         },
       });
+
       /** @type {PegDescriptor} */
       const pegDescriptor = harden({
         // TODO
@@ -113,7 +120,7 @@ const makePeg = () => {
     /**
      * Peg a local asset over a network connection.
      *
-     * @param {Promise<Connection>|Connection} c The network connection (IBC channel) to communicate over
+     * @param {Connection|PromiseLike<Connection>} c The network connection (IBC channel) to communicate over
      * @param {Issuer} issuer Local ERTP issuer whose assets should be pegged to c
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak on the connection
      * @returns {Promise<[Courier,PegDescriptor]>}
