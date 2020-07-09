@@ -20,8 +20,8 @@ const contractPath = `${__dirname}/../src/pegasus`;
 /**
  * @param {import('tape-promise/tape').Test} t
  */
-async function testRemoteSendLocal(t) {
-  t.plan(7);
+async function testRemotePeg(t) {
+  t.plan(8);
 
   /**
    * @type {import('@agoric/ertp').DepositFacet?}
@@ -85,9 +85,9 @@ async function testRemoteSendLocal(t) {
   const chandler = E(pegasus).makePegConnectionHandler();
   const connP = E(portP).connect(portName, chandler);
 
-  const pegHandle = await E(pegasus).pegRemote(connP, 'uatom');
-  const { localBrand } = await E(pegasus).getDescriptor(pegHandle);
-  const localIssuer = await E(pegasus).getIssuer(localBrand);
+  const pegP = await E(pegasus).pegRemote('Gaia', connP, 'uatom');
+  const localBrand = await E(pegP).getLocalBrand();
+  const localIssuer = await E(pegasus).getLocalIssuer(localBrand);
 
   const localPurseP = E(localIssuer).makeEmptyPurse();
   localDepositFacet = await E(localPurseP).makeDepositFacet();
@@ -118,8 +118,10 @@ async function testRemoteSendLocal(t) {
   // [TypeError: deposit does not accept promises as first argument. Instead of passing the promise (deposit(paymentPromise)), consider unwrapping the promise first: paymentPromise.then(actualPayment => deposit(actualPayment))]
   const localAtomsP = await E(localPurseP).withdraw(localAtomsAmount);
 
+  const allegedName = await E(pegP).getAllegedName();
+  t.equals(allegedName, 'Gaia', 'alleged peg name is equal');
   const transferInvite = await E(pegasus).makeInviteToTransfer(
-    pegHandle,
+    pegP,
     'markaccount',
   );
   const { outcome, payout } = await E(zoe).offer(
@@ -142,7 +144,5 @@ async function testRemoteSendLocal(t) {
   t.assert(!stillIsLive, 'payment is consumed');
 }
 
-test('remote peg - send local erights over network', t =>
-  testRemoteSendLocal(t).catch(err =>
-    t.isNot(err, err, 'unexpected exception'),
-  ));
+test('remote peg', t =>
+  testRemotePeg(t).catch(err => t.isNot(err, err, 'unexpected exception')));

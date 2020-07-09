@@ -5,6 +5,7 @@
 
 import { assert, details, q } from '@agoric/assert';
 import produceIssuer from '@agoric/ertp';
+import { produceNotifier } from '@agoric/notifier';
 import makeStore from '@agoric/store';
 import makeWeakStore from '@agoric/weak-store';
 import { E } from '@agoric/eventual-send';
@@ -24,6 +25,7 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {import('@agoric/ertp/src/issuer').Issuer} Issuer
  * @typedef {import('@agoric/ertp/src/issuer').Payment} Payment
  * @typedef {import('@agoric/ertp/src/issuer').PaymentP} PaymentP
+ * @typedef {import('@agoric/notifier').Notifier} Notifier
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Bytes} Bytes
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Data} Data
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Connection} Connection
@@ -32,11 +34,6 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {import('@agoric/zoe').OfferHook} OfferHook
  * @typedef {import('@agoric/zoe').ContractFacet} ContractFacet
  * @typedef {import('@agoric/zoe').Invite} Invite
- */
-
-/**
- * @typedef {Object} BoardFacet
- * @property {(id: string) => any} getValue
  */
 
 /**
@@ -55,12 +52,20 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {string} DepositAddress
  * @typedef {string} TransferProtocol
  *
- * @typedef {Object} PegHandle
+ * @typedef {Object} Peg
+ * @property {() => string} getAllegedName
+ * @property {() => Brand} getLocalBrand
+ * @property {() => DenomUri} getDenomUri
+ *
  * @typedef {Object} PegDescriptor
  * @property {Brand} localBrand
  * @property {DenomUri} denomUri
- * @property {Endpoint} allegedLocalAddress
- * @property {Endpoint} allegedRemoteAddress
+ * @property {string} allegedName
+ */
+
+/**
+ * @typedef {Object} BoardDepositFacet a registry for depositAddresses
+ * @property {(id: DepositAddress) => any} getValue return the corresponding
  */
 
 /**
@@ -95,7 +100,7 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] the protocol to use
  * @returns {Promise<string>} denomination URI scoped to endpoint
  */
-async function getDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
+async function makeDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
   switch (protocol) {
     case 'ics20-1': {
       return E.when(endpointP, endpoint => {
@@ -200,7 +205,7 @@ const sendTransferPacket = async (c, packet) => {
  *
  * @typedef {Object} CourierArgs
  * @property {Connection} connection
- * @property {BoardFacet} board
+ * @property {BoardDepositFacet} board
  * @property {DenomUri} denomUri
  * @property {Issuer} localIssuer
  * @property {Brand} localBrand
@@ -274,16 +279,18 @@ const makeCourier = ({
  * Make a Pegasus public API.
  *
  * @param {ContractFacet} zcf the Zoe Contract Facet
- * @param {BoardFacet} board where to find depositFacets
+ * @param {BoardDepositFacet} board where to find depositFacets
  */
 const makePegasus = (zcf, board) => {
   const { checkHook, escrowAndAllocateTo } = makeZoeHelpers(zcf);
   const { unescrow } = makeOurZoeHelpers(zcf);
 
+  const { notifier, updater } = produceNotifier();
+
   /**
    * @typedef {Object} LocalDenomState
    * @property {Store<DenomUri, Courier>} denomUriToCourier
-   * @property {Set<PegHandle>} handles
+   * @property {Set<Peg>} pegs
    * @property {number} lastNonce
    */
 
@@ -315,35 +322,40 @@ const makePegasus = (zcf, board) => {
   };
 
   /**
-   * @type {Store<PegHandle, PegDescriptor>}
+   * @type {Store<Peg, Connection>}
    */
-  const handleToDesc = makeStore('PegHandle');
+  const pegToConnection = makeStore('Peg');
 
   /**
-   * @type {Store<PegHandle, Connection>}
-   */
-  const handleToConnection = makeStore('PegHandle');
-
-  /**
-   * Create a fresh peg Handle associated with a descriptor.
+   * Create a fresh Peg associated with a descriptor.
    *
    * @param {Connection} c
    * @param {PegDescriptor} desc
-   * @param {Set<PegHandle>} handles
-   * @returns {PegHandle}
+   * @param {Set<Peg>} pegs
+   * @returns {Peg}
    */
-  const makePegHandle = (c, desc, handles) => {
-    /** @type {PegHandle} */
-    const pegHandle = harden({});
+  const makePeg = (c, desc, pegs) => {
+    /** @type {Peg} */
+    const peg = harden({
+      getAllegedName() {
+        return desc.allegedName;
+      },
+      getLocalBrand() {
+        return desc.localBrand;
+      },
+      getDenomUri() {
+        return desc.denomUri;
+      },
+    });
 
-    handles.add(pegHandle);
-    handleToConnection.init(pegHandle, c);
-    handleToDesc.init(pegHandle, desc);
-    return pegHandle;
+    pegs.add(peg);
+    pegToConnection.init(peg, c);
+    updater.updateState([...pegToConnection.keys()]);
+    return peg;
   };
 
   return harden({
-    getDenomUri,
+    makeDenomUri,
     /**
      * Return a handler that can be used with the Network API.
      * @returns {ConnectionHandler}
@@ -354,15 +366,15 @@ const makePegasus = (zcf, board) => {
        */
       const denomUriToCourier = makeStore('Denomination');
       /**
-       * @type {Set<PegHandle>}
+       * @type {Set<Peg>}
        */
-      const handles = new Set();
+      const pegs = new Set();
       return {
         async onOpen(c) {
           // Register C with the table of Peg receivers.
           connectionToLocalDenomState.init(c, {
             denomUriToCourier,
-            handles,
+            pegs,
             lastNonce: 0,
           });
         },
@@ -388,9 +400,8 @@ const makePegasus = (zcf, board) => {
         async onClose(c) {
           // Unregister C.  Pending transfers will be rejected by the Network API.
           connectionToLocalDenomState.delete(c);
-          for (const pegHandle of handles.keys()) {
-            handleToConnection.delete(pegHandle);
-            handleToDesc.delete(pegHandle);
+          for (const peg of pegs.keys()) {
+            pegToConnection.delete(peg);
           }
         },
       };
@@ -398,13 +409,15 @@ const makePegasus = (zcf, board) => {
     /**
      * Peg a remote asset over a network connection.
      *
+     * @param {string} allegedName
      * @param {Connection|PromiseLike<Connection>} connectionP The network connection (IBC channel) to communicate over
      * @param {Denom} remoteDenom Remote denomination
      * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged extents
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
-     * @returns {Promise<PegDescriptor>}
+     * @returns {Promise<Peg>}
      */
     async pegRemote(
+      allegedName,
       connectionP,
       remoteDenom,
       amountMathKind = DEFAULT_AMOUNT_MATH_KIND,
@@ -434,11 +447,8 @@ const makePegasus = (zcf, board) => {
       );
 
       // Find our data elements.
-      const [allegedLocalAddress, allegedRemoteAddress] = await Promise.all([
-        E(connectionP).getLocalAddress(),
-        E(connectionP).getRemoteAddress(),
-      ]);
-      const denomUri = await getDenomUri(
+      const allegedLocalAddress = await E(c).getLocalAddress();
+      const denomUri = await makeDenomUri(
         allegedLocalAddress,
         remoteDenom,
         protocol,
@@ -466,25 +476,27 @@ const makePegasus = (zcf, board) => {
         redeem: amount => E(localMint).mintPayment(amount),
       });
 
-      const { denomUriToCourier, handles } = connectionToLocalDenomState.get(c);
+      const { denomUriToCourier, pegs } = connectionToLocalDenomState.get(c);
       denomUriToCourier.init(denomUri, courier);
 
-      return makePegHandle(
-        c,
-        { localBrand, denomUri, allegedLocalAddress, allegedRemoteAddress },
-        handles,
-      );
+      return makePeg(c, { localBrand, denomUri, allegedName }, pegs);
     },
 
     /**
      * Peg a local asset over a network connection.
      *
+     * @param {string} allegedName
      * @param {Connection|PromiseLike<Connection>} connectionP The network connection (IBC channel) to communicate over
      * @param {Issuer} localIssuer Local ERTP issuer whose assets should be pegged to c
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak on the connection
-     * @returns {Promise<PegDescriptor>}
+     * @returns {Promise<Peg>}
      */
-    async pegLocal(connectionP, localIssuer, protocol = DEFAULT_PROTOCOL) {
+    async pegLocal(
+      allegedName,
+      connectionP,
+      localIssuer,
+      protocol = DEFAULT_PROTOCOL,
+    ) {
       // Assertions
       assert(
         protocol === 'ics20-1',
@@ -503,16 +515,13 @@ const makePegasus = (zcf, board) => {
       const denom = `pegasus${localDenomState.lastNonce}`;
 
       // Find our data elements.
-      const [allegedLocalAddress, allegedRemoteAddress] = await Promise.all([
-        E(c).getLocalAddress(),
-        E(c).getRemoteAddress(),
-      ]);
-      const denomUri = await getDenomUri(allegedLocalAddress, denom, protocol);
+      const allegedLocalAddress = await E(c).getLocalAddress();
+      const denomUri = await makeDenomUri(allegedLocalAddress, denom, protocol);
 
       // Create a purse in which to keep our denomination.
       const [backingPurse, localBrand] = await Promise.all([
         E(localIssuer).makeEmptyPurse(),
-        E(localIssuer).getBrand(),
+        E(localIssuer).getLocalBrand(),
       ]);
 
       // Ensure the issuer can be used in Zoe offers.
@@ -529,53 +538,46 @@ const makePegasus = (zcf, board) => {
         redeem: amount => E(backingPurse).withdraw(amount),
       });
 
-      const { denomUriToCourier, handles } = localDenomState;
+      const { denomUriToCourier, pegs } = localDenomState;
       denomUriToCourier.init(denomUri, courier);
 
-      return makePegHandle(
-        c,
-        { localBrand, denomUri, allegedLocalAddress, allegedRemoteAddress },
-        handles,
-      );
+      return makePeg(c, { localBrand, denomUri, allegedName }, pegs);
     },
 
     /**
      * Find one of our registered issuers.
-     * @param {Brand} brand
+     * @param {Brand} localBrand
      * @returns {Promise<Issuer>}
      */
-    async getIssuer(brand) {
-      return brandToIssuer.get(brand);
-    },
-
-    /**
-     * Look up a descriptor from a handle.
-     * @param {PegHandle} pegHandle
-     * @returns {Promise<PegDescriptor>}
-     */
-    async getDescriptor(pegHandle) {
-      return handleToDesc.get(pegHandle);
+    async getLocalIssuer(localBrand) {
+      return brandToIssuer.get(localBrand);
     },
 
     /**
      * Get all the created pegs.
-     * @returns {Promise<[PegHandle, PegDescriptor][]>}
+     * @returns {Promise<Notifier>}
      */
-    async getPegEntries() {
-      return [...handleToDesc.entries()];
+    async getNotifier() {
+      return notifier;
     },
 
     /**
-     * Create a Zoe invite to transfer assets over desc to a deposit address.
+     * Create a Zoe invite to transfer assets over network to a deposit address.
      *
-     * @param {PegHandle} pegHandle
+     * @param {Peg|Promise<Peg>} pegP
      * @param {DepositAddress} depositAddress
      * @returns {Promise<Invite>}
      */
-    async makeInviteToTransfer(pegHandle, depositAddress) {
-      // Expand the handle.
-      const c = handleToConnection.get(pegHandle);
-      const { localBrand, denomUri } = handleToDesc.get(pegHandle);
+    async makeInviteToTransfer(pegP, depositAddress) {
+      // Verify the peg.
+      const peg = await pegP;
+      const c = pegToConnection.get(peg);
+
+      // Get details from the peg.
+      const [localBrand, denomUri] = await Promise.all([
+        E(peg).getLocalBrand(),
+        E(peg).getDenomUri(),
+      ]);
       const { denomUriToCourier } = connectionToLocalDenomState.get(c);
       const { send } = denomUriToCourier.get(denomUri);
 
