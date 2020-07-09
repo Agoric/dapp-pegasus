@@ -72,7 +72,6 @@ async function testRemoteSendLocal(t) {
               amount: '100',
               denomination: 'portdef/chanabc/uatom',
               receiver: 'markaccount',
-              sender: 'FIXME:sender',
             },
             'expected transfer packet',
           );
@@ -86,8 +85,8 @@ async function testRemoteSendLocal(t) {
   const chandler = E(pegasus).makePegConnectionHandler();
   const connP = E(portP).connect(portName, chandler);
 
-  const pegDesc = await E(pegasus).pegRemote(connP, 'uatom');
-  const { brand: localBrand } = pegDesc;
+  const pegHandle = await E(pegasus).pegRemote(connP, 'uatom');
+  const { localBrand } = await E(pegasus).getDescriptor(pegHandle);
   const localIssuer = await E(pegasus).getIssuer(localBrand);
 
   const localPurseP = E(localIssuer).makeEmptyPurse();
@@ -120,7 +119,7 @@ async function testRemoteSendLocal(t) {
   const localAtomsP = await E(localPurseP).withdraw(localAtomsAmount);
 
   const transferInvite = await E(pegasus).makeInviteToTransfer(
-    pegDesc,
+    pegHandle,
     'markaccount',
   );
   const { outcome, payout } = await E(zoe).offer(

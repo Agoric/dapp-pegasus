@@ -55,17 +55,19 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {string} DepositAddress
  * @typedef {string} TransferProtocol
  *
+ * @typedef {Object} PegHandle
  * @typedef {Object} PegDescriptor
- * @property {Brand} brand
+ * @property {Brand} localBrand
  * @property {DenomUri} denomUri
- * @property {Endpoint} endpoint
+ * @property {Endpoint} allegedLocalAddress
+ * @property {Endpoint} allegedRemoteAddress
  */
 
 /**
  * @typedef {Object} FungibleTransferPacket
  * @property {string} amount The extent of the amount
  * @property {Denom} denomination The denomination of the amount
- * @property {string} sender The sender address
+ * @property {string} [sender] The sender address
  * @property {DepositAddress} receiver The receiver deposit address
  */
 
@@ -148,10 +150,9 @@ function makeICS20Converter(localBrand, prefixedDenom) {
    *
    * @param {Amount} amount
    * @param {DepositAddress} depositAddress
-   * @param {'FIXME:sender'} sender
    * @returns {FungibleTransferPacket}
    */
-  function localAmountToPacket(amount, depositAddress, sender) {
+  function localAmountToPacket(amount, depositAddress) {
     const { brand, extent } = amount;
     assert(
       brand === localBrand,
@@ -164,7 +165,6 @@ function makeICS20Converter(localBrand, prefixedDenom) {
       amount: stringExtent,
       denomination: prefixedDenom,
       receiver: depositAddress,
-      sender,
     });
   }
 
@@ -233,7 +233,7 @@ const makeCourier = ({
       E(localIssuer).getAmountOf(paymentP),
       paymentP,
     ]);
-    const packet = localAmountToPacket(amount, depositAddress, 'FIXME:sender');
+    const packet = localAmountToPacket(amount, depositAddress);
 
     // Retain the payment.  We must not proceed on failure.
     await retain(payment, amount);
@@ -281,13 +281,9 @@ const makePegasus = (zcf, board) => {
   const { unescrow } = makeOurZoeHelpers(zcf);
 
   /**
-   * @type {Store<Endpoint, Connection>}
-   */
-  const endpointToConnection = makeStore('Endpoint');
-
-  /**
    * @typedef {Object} LocalDenomState
    * @property {Store<DenomUri, Courier>} denomUriToCourier
+   * @property {Set<PegHandle>} handles
    * @property {number} lastNonce
    */
 
@@ -318,6 +314,34 @@ const makePegasus = (zcf, board) => {
     brandToIssuer.init(localBrand, localIssuer);
   };
 
+  /**
+   * @type {Store<PegHandle, PegDescriptor>}
+   */
+  const handleToDesc = makeStore('PegHandle');
+
+  /**
+   * @type {Store<PegHandle, Connection>}
+   */
+  const handleToConnection = makeStore('PegHandle');
+
+  /**
+   * Create a fresh peg Handle associated with a descriptor.
+   *
+   * @param {Connection} c
+   * @param {PegDescriptor} desc
+   * @param {Set<PegHandle>} handles
+   * @returns {PegHandle}
+   */
+  const makePegHandle = (c, desc, handles) => {
+    /** @type {PegHandle} */
+    const pegHandle = harden({});
+
+    handles.add(pegHandle);
+    handleToConnection.init(pegHandle, c);
+    handleToDesc.init(pegHandle, desc);
+    return pegHandle;
+  };
+
   return harden({
     getDenomUri,
     /**
@@ -329,15 +353,18 @@ const makePegasus = (zcf, board) => {
        * @type {Store<DenomUri, Courier>}
        */
       const denomUriToCourier = makeStore('Denomination');
+      /**
+       * @type {Set<PegHandle>}
+       */
+      const handles = new Set();
       return {
-        async onOpen(c, localAddr) {
-          const endpoint = localAddr;
+        async onOpen(c) {
           // Register C with the table of Peg receivers.
           connectionToLocalDenomState.init(c, {
             denomUriToCourier,
+            handles,
             lastNonce: 0,
           });
-          endpointToConnection.init(endpoint, c);
         },
         async onReceive(c, packetBytes) {
           // Dispatch the packet to the appropriate Peg for this connection.
@@ -359,8 +386,12 @@ const makePegasus = (zcf, board) => {
             });
         },
         async onClose(c) {
-          // Unregister C.  Pending transfers will be rejected.
+          // Unregister C.  Pending transfers will be rejected by the Network API.
           connectionToLocalDenomState.delete(c);
+          for (const pegHandle of handles.keys()) {
+            handleToConnection.delete(pegHandle);
+            handleToDesc.delete(pegHandle);
+          }
         },
       };
     },
@@ -403,8 +434,15 @@ const makePegasus = (zcf, board) => {
       );
 
       // Find our data elements.
-      const endpoint = await E(connectionP).getLocalAddress();
-      const denomUri = await getDenomUri(endpoint, remoteDenom, protocol);
+      const [allegedLocalAddress, allegedRemoteAddress] = await Promise.all([
+        E(connectionP).getLocalAddress(),
+        E(connectionP).getRemoteAddress(),
+      ]);
+      const denomUri = await getDenomUri(
+        allegedLocalAddress,
+        remoteDenom,
+        protocol,
+      );
 
       // Create the issuer for the local erights corresponding to the remote values.
       const {
@@ -428,17 +466,14 @@ const makePegasus = (zcf, board) => {
         redeem: amount => E(localMint).mintPayment(amount),
       });
 
-      const { denomUriToCourier } = connectionToLocalDenomState.get(c);
+      const { denomUriToCourier, handles } = connectionToLocalDenomState.get(c);
       denomUriToCourier.init(denomUri, courier);
 
-      /** @type {PegDescriptor} */
-      const pegDescriptor = harden({
-        brand: localBrand,
-        denomUri,
-        endpoint,
-      });
-
-      return pegDescriptor;
+      return makePegHandle(
+        c,
+        { localBrand, denomUri, allegedLocalAddress, allegedRemoteAddress },
+        handles,
+      );
     },
 
     /**
@@ -468,8 +503,11 @@ const makePegasus = (zcf, board) => {
       const denom = `pegasus${localDenomState.lastNonce}`;
 
       // Find our data elements.
-      const endpoint = await E(c).getLocalAddress();
-      const denomUri = await getDenomUri(endpoint, denom, protocol);
+      const [allegedLocalAddress, allegedRemoteAddress] = await Promise.all([
+        E(c).getLocalAddress(),
+        E(c).getRemoteAddress(),
+      ]);
+      const denomUri = await getDenomUri(allegedLocalAddress, denom, protocol);
 
       // Create a purse in which to keep our denomination.
       const [backingPurse, localBrand] = await Promise.all([
@@ -491,17 +529,14 @@ const makePegasus = (zcf, board) => {
         redeem: amount => E(backingPurse).withdraw(amount),
       });
 
-      const { denomUriToCourier } = localDenomState;
+      const { denomUriToCourier, handles } = localDenomState;
       denomUriToCourier.init(denomUri, courier);
 
-      /** @type {PegDescriptor} */
-      const pegDescriptor = harden({
-        brand: localBrand,
-        denomUri,
-        endpoint,
-      });
-
-      return pegDescriptor;
+      return makePegHandle(
+        c,
+        { localBrand, denomUri, allegedLocalAddress, allegedRemoteAddress },
+        handles,
+      );
     },
 
     /**
@@ -514,21 +549,35 @@ const makePegasus = (zcf, board) => {
     },
 
     /**
+     * Look up a descriptor from a handle.
+     * @param {PegHandle} pegHandle
+     * @returns {Promise<PegDescriptor>}
+     */
+    async getDescriptor(pegHandle) {
+      return handleToDesc.get(pegHandle);
+    },
+
+    /**
+     * Get all the created pegs.
+     * @returns {Promise<[PegHandle, PegDescriptor][]>}
+     */
+    async getPegEntries() {
+      return [...handleToDesc.entries()];
+    },
+
+    /**
      * Create a Zoe invite to transfer assets over desc to a deposit address.
      *
-     * @param {PegDescriptor} desc
+     * @param {PegHandle} pegHandle
      * @param {DepositAddress} depositAddress
      * @returns {Promise<Invite>}
      */
-    async makeInviteToTransfer(desc, depositAddress) {
-      // Validate the descriptor.
-      assert(
-        brandToIssuer.has(desc.brand),
-        details`Brand is not a registered peg`,
-      );
-      const c = endpointToConnection.get(desc.endpoint);
+    async makeInviteToTransfer(pegHandle, depositAddress) {
+      // Expand the handle.
+      const c = handleToConnection.get(pegHandle);
+      const { localBrand, denomUri } = handleToDesc.get(pegHandle);
       const { denomUriToCourier } = connectionToLocalDenomState.get(c);
-      const { send } = denomUriToCourier.get(desc.denomUri);
+      const { send } = denomUriToCourier.get(denomUri);
 
       /**
        * @type {OfferHook}
@@ -537,8 +586,8 @@ const makePegasus = (zcf, board) => {
         const everything = zcf.getCurrentAllocation(offerHandle).Transfer;
 
         assert(
-          everything.brand === desc.brand,
-          details`Transfer brand doesn't match this descriptor`,
+          everything.brand === localBrand,
+          details`Transfer brand doesn't match Pegasus handle's localBrand`,
         );
 
         // Fetch the transfer payment.
@@ -556,7 +605,7 @@ const makePegasus = (zcf, board) => {
 
         if (success) {
           // They got what they wanted!
-          zcf.complete(harden([offerHandle]));
+          zcf.complete([offerHandle]);
           return;
         }
 
