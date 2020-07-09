@@ -126,13 +126,12 @@ async function getDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
 }
 
 /**
- * @type {import('@agoric/zoe').MakeContract}
+ * Make a Pegasus public API.
+ *
+ * @param {ContractFacet} zcf the Zoe Contract Facet
+ * @param {{ getValue: (id: string) => any }} board where to find depositFacets
  */
-const makeContract = zcf => {
-  /**
-   * @type {{ board: { getValue: (id: string) => any }}}
-   */
-  const { board } = zcf.getInstanceRecord().terms;
+const makePegasus = (zcf, board) => {
   const { checkHook, escrowAndAllocateTo } = makeZoeHelpers(zcf);
 
   /**
@@ -188,7 +187,7 @@ const makeContract = zcf => {
 
   let lastLocalIssuerNonce = 0;
 
-  const publicAPI = harden({
+  return harden({
     getDenomUri,
     /**
      * Return a handler that can be used with the Network API.
@@ -528,7 +527,15 @@ const makeContract = zcf => {
       );
     },
   });
+};
 
+/**
+ * @type {import('@agoric/zoe').MakeContract}
+ */
+const makeContract = zcf => {
+  const { board } = zcf.getInstanceRecord().terms;
+
+  const publicAPI = makePegasus(zcf, board);
   zcf.initPublicAPI(publicAPI);
 
   const adminHook = _offerHandle => {
@@ -538,4 +545,5 @@ const makeContract = zcf => {
 };
 
 harden(makeContract);
-export { makeContract };
+harden(makePegasus);
+export { makeContract, makePegasus };
