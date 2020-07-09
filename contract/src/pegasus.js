@@ -13,6 +13,8 @@ import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/m
 
 import { makeZoeHelpers } from '@agoric/zoe/src/contractSupport';
 
+import { makeZoeHelpers as makeOurZoeHelpers } from './helpers';
+
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';
 const DEFAULT_PROTOCOL = 'ics20-1';
 
@@ -28,27 +30,14 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {import('@agoric/swingset-vat/src/vats/network').ConnectionHandler} ConnectionHandler
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Endpoint} Endpoint
  * @typedef {import('@agoric/zoe').OfferHook} OfferHook
- * @typedef {import('@agoric/zoe').OfferHandle} OfferHandle
- * @typedef {import('@agoric/zoe').Keyword} Keyword
  * @typedef {import('@agoric/zoe').ContractFacet} ContractFacet
  * @typedef {import('@agoric/zoe').Invite} Invite
- * @typedef {import('@agoric/zoe').OfferResultRecord} OfferResultRecord
  */
 
 /**
  * @typedef {Object} BoardFacet
  * @property {(id: string) => any} getValue
  */
-
-/**
- * @param {ContractFacet} zcf
- * @returns {Promise<OfferResultRecord>}
- */
-export function makeEmptyOfferWithResult(zcf) {
-  const invite = zcf.makeInvitation(_ => undefined, 'empty offer');
-  const zoe = zcf.getZoeService();
-  return E(zoe).offer(invite);
-}
 
 /**
  * @template K,V
@@ -289,38 +278,7 @@ const makeCourier = ({
  */
 const makePegasus = (zcf, board) => {
   const { checkHook, escrowAndAllocateTo } = makeZoeHelpers(zcf);
-
-  /**
-   * TODO: Add this to Zoe helpers!
-   * Extract a payment from a donorHandle.
-   *
-   * @param {{amount: Amount, keyword: Keyword, donorHandle: OfferHandle}} arg0
-   */
-  const unescrow = async ({ amount, keyword, donorHandle }) => {
-    const {
-      offerHandle: ourOfferHandleP,
-      payout: ourPayoutP,
-    } = await makeEmptyOfferWithResult(zcf);
-
-    const ourOfferHandle = await ourOfferHandleP;
-    const originalAmount = zcf.getCurrentAllocation(donorHandle)[keyword];
-
-    // Take the payment from the donor.
-    const remaining = zcf
-      .getAmountMath(amount.brand)
-      .subtract(originalAmount, amount);
-    zcf.reallocate(
-      [donorHandle, ourOfferHandle],
-      [{ [keyword]: remaining }, { [keyword]: amount }],
-    );
-    zcf.complete(harden([ourOfferHandle]));
-
-    // Wait for the payout to get the payment promise.
-    const { [keyword]: paymentP } = await ourPayoutP;
-
-    // The caller can wait.
-    return paymentP;
-  };
+  const { unescrow } = makeOurZoeHelpers(zcf);
 
   /**
    * @type {Store<Endpoint, Connection>}

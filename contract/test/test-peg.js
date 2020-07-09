@@ -1,3 +1,4 @@
+// eslint-disable-next-line import/no-extraneous-dependencies
 import '@agoric/install-ses';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { test } from 'tape-promise/tape';
@@ -34,9 +35,6 @@ async function testRemoteSendLocal(t) {
   });
 
   const zoe = makeZoe();
-
-  // Get the Zoe invite issuer from Zoe.
-  const inviteIssuer = await E(zoe).getInviteIssuer();
 
   // Pack the contract.
   const contractBundle = await bundleSource(contractPath);
