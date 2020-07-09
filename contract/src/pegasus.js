@@ -36,6 +36,11 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  */
 
 /**
+ * @typedef {Object} BoardFacet
+ * @property {(id: string) => any} getValue
+ */
+
+/**
  * @param {ContractFacet} zcf
  * @returns {Promise<OfferResultRecord>}
  */
@@ -83,13 +88,12 @@ export function makeEmptyOfferWithResult(zcf) {
  */
 
 /**
- * @typedef {Object} Courier
- * @property {(payment: PaymentP, depositAddress: DepositAddress) => Promise<TransferResult>} transfer
+ * @typedef {(payment: PaymentP, depositAddress: DepositAddress) => Promise<TransferResult>} Sender
  * Successive transfers are not guaranteed to be processed in the order in which they were sent.
- */
-
-/**
  * @typedef {(packet: FungibleTransferPacket) => Promise<unknown>} Receiver
+ * @typedef {Object} Courier
+ * @property {Sender} send
+ * @property {Receiver} receive
  */
 
 /**
@@ -126,10 +130,162 @@ async function getDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
 }
 
 /**
+ * Translate to and from local tokens.
+ * @param {Brand} localBrand
+ * @param {string} prefixedDenom
+ */
+function makeICS20Converter(localBrand, prefixedDenom) {
+  /**
+   * Convert an inbound packet to a local amount.
+   *
+   * @param {FungibleTransferPacket} packet
+   * @returns {Amount}
+   */
+  function packetToLocalAmount(packet) {
+    // packet.amount is a string in JSON.
+    const floatExtent = Number(packet.amount);
+
+    // If we overflow, or don't have a number, throw an exception!
+    const extent = Nat(floatExtent);
+
+    return harden({
+      brand: localBrand,
+      extent,
+    });
+  }
+
+  /**
+   * Convert the amount to a packet to send.
+   *
+   * @param {Amount} amount
+   * @param {DepositAddress} depositAddress
+   * @param {'FIXME:sender'} sender
+   * @returns {FungibleTransferPacket}
+   */
+  function localAmountToPacket(amount, depositAddress, sender) {
+    const { brand, extent } = amount;
+    assert(
+      brand === localBrand,
+      details`Brand must our local issuer's, not ${q(brand)}`,
+    );
+    const stringExtent = String(Nat(extent));
+
+    // Generate the ics20-1 packet.
+    return harden({
+      amount: stringExtent,
+      denomination: prefixedDenom,
+      receiver: depositAddress,
+      sender,
+    });
+  }
+
+  return { localAmountToPacket, packetToLocalAmount };
+}
+
+/**
+ * Send the transfer packet and return a status.
+ *
+ * @param {Connection} c
+ * @param {FungibleTransferPacket} packet
+ * @returns {Promise<TransferResult>}
+ */
+const sendTransferPacket = async (c, packet) => {
+  const packetBytes = JSON.stringify(packet);
+  return E(c)
+    .send(packetBytes)
+    .then(ack => {
+      // We got a response, so possible success.
+      const { success, error } = JSON.parse(ack);
+      if (!success) {
+        // Let the next catch handle this error.
+        throw error;
+      }
+      return {
+        success: true,
+      };
+    });
+};
+
+/**
+ * Create the [send, receive] pair.
+ *
+ * @typedef {Object} CourierArgs
+ * @property {Connection} connection
+ * @property {BoardFacet} board
+ * @property {DenomUri} denomUri
+ * @property {Issuer} localIssuer
+ * @property {Brand} localBrand
+ * @property {(payment: Payment, amount: Amount) => Promise<unknown>} retain
+ * @property {(amount: Amount) => Promise<Payment>} redeem
+ * @param {CourierArgs} arg0
+ * @returns {Courier}
+ */
+const makeCourier = ({
+  connection,
+  board,
+  denomUri,
+  localIssuer,
+  localBrand,
+  retain,
+  redeem,
+}) => {
+  const uriMatch = denomUri.match(/^[^:]+:(.*)$/);
+  assert(uriMatch, details`denomUri ${q(denomUri)} does not look like a URI`);
+  const prefixedDenom = uriMatch[1];
+
+  const { localAmountToPacket, packetToLocalAmount } = makeICS20Converter(
+    localBrand,
+    prefixedDenom,
+  );
+
+  /** @type {Sender} */
+  const send = async (paymentP, depositAddress) => {
+    const [amount, payment] = await Promise.all([
+      E(localIssuer).getAmountOf(paymentP),
+      paymentP,
+    ]);
+    const packet = localAmountToPacket(amount, depositAddress, 'FIXME:sender');
+
+    // Retain the payment.  We must not proceed on failure.
+    await retain(payment, amount);
+
+    // The payment is escrowed, so try sending.
+    return sendTransferPacket(connection, packet).catch(async error => {
+      // NOTE: Only do this if the *transfer* failed.
+      // Not so bad, we can return a refund.
+      const refund = await redeem(amount);
+      /** @type {TransferResult} */
+      const transferResult = {
+        success: false,
+        error,
+        refund,
+      };
+      return transferResult;
+    });
+  };
+
+  /** @type {Receiver} */
+  const receive = async packet => {
+    // Look up the deposit facet for this board address, if there is one.
+    const depositAddress = packet.receiver;
+    const localAmount = packetToLocalAmount(packet);
+    const depositFacet = await E(board).getValue(depositAddress);
+
+    // Redeem the backing payment.
+    const payment = await redeem(localAmount);
+
+    // Send to the deposit facet, if we can.
+    return E(depositFacet).receive(payment);
+  };
+
+  return { send, receive };
+};
+
+/**
  * Make a Pegasus public API.
  *
  * @param {ContractFacet} zcf the Zoe Contract Facet
- * @param {{ getValue: (id: string) => any }} board where to find depositFacets
+ * @param {BoardFacet} board where to find depositFacets
  */
 const makePegasus = (zcf, board) => {
   const { checkHook, escrowAndAllocateTo } = makeZoeHelpers(zcf);
@@ -172,14 +328,15 @@ const makePegasus = (zcf, board) => {
   const endpointToConnection = makeStore('Endpoint');
 
   /**
-   * @type {WeakStore<Connection, Store<DenomUri, Receiver>>}
+   * @typedef {Object} LocalDenomState
+   * @property {Store<DenomUri, Courier>} denomUriToCourier
+   * @property {number} lastNonce
    */
-  const connectionsToDenomReceivers = makeWeakStore('Connection');
 
   /**
-   * @type {WeakStore<Connection, Store<DenomUri, Courier>>}
+   * @type {WeakStore<Connection, LocalDenomState>}
    */
-  const connectionsToDenomCouriers = makeWeakStore('Connection');
+  const connectionToLocalDenomState = makeWeakStore('Connection');
 
   /**
    * @type {WeakStore<Brand, Issuer>}
@@ -187,6 +344,21 @@ const makePegasus = (zcf, board) => {
   const brandToIssuer = makeWeakStore('Brand');
 
   let lastLocalIssuerNonce = 0;
+  /**
+   * Register a brand and issuer with the zcf.
+   * @param {Brand} localBrand
+   * @param {Issuer} localIssuer
+   */
+  const registerBrand = async (localBrand, localIssuer) => {
+    if (brandToIssuer.has(localBrand)) {
+      // Already exists.
+      return;
+    }
+    lastLocalIssuerNonce += 1;
+    const localIssuerKeyword = `Local${lastLocalIssuerNonce}`;
+    await zcf.addNewIssuer(localIssuer, localIssuerKeyword);
+    brandToIssuer.init(localBrand, localIssuer);
+  };
 
   return harden({
     getDenomUri,
@@ -196,16 +368,17 @@ const makePegasus = (zcf, board) => {
      */
     makePegConnectionHandler() {
       /**
-       * @type {Store<DenomUri, Receiver>}
+       * @type {Store<DenomUri, Courier>}
        */
-      const denomUriToReceiver = makeStore('Denomination');
       const denomUriToCourier = makeStore('Denomination');
       return {
         async onOpen(c, localAddr) {
           const endpoint = localAddr;
           // Register C with the table of Peg receivers.
-          connectionsToDenomReceivers.init(c, denomUriToReceiver);
-          connectionsToDenomCouriers.init(c, denomUriToCourier);
+          connectionToLocalDenomState.init(c, {
+            denomUriToCourier,
+            lastNonce: 0,
+          });
           endpointToConnection.init(endpoint, c);
         },
         async onReceive(c, packetBytes) {
@@ -215,8 +388,8 @@ const makePegasus = (zcf, board) => {
            */
           const packet = JSON.parse(packetBytes);
           const denomUri = `ics20-1:${packet.denomination}`;
-          const receiver = denomUriToReceiver.get(denomUri);
-          return receiver(packet)
+          const { receive } = denomUriToCourier.get(denomUri);
+          return receive(packet)
             .then(_ => {
               const ack = { success: true };
               return JSON.stringify(ack);
@@ -229,8 +402,7 @@ const makePegasus = (zcf, board) => {
         },
         async onClose(c) {
           // Unregister C.  Pending transfers will be rejected.
-          connectionsToDenomReceivers.delete(c);
-          connectionsToDenomCouriers.delete(c);
+          connectionToLocalDenomState.delete(c);
         },
       };
     },
@@ -249,6 +421,7 @@ const makePegasus = (zcf, board) => {
       amountMathKind = DEFAULT_AMOUNT_MATH_KIND,
       protocol = DEFAULT_PROTOCOL,
     ) {
+      // Assertions
       assert(
         // TODO: Find the exact restrictions on Cosmos denoms.
         remoteDenom.match(/^[a-z][a-z0-9]*$/),
@@ -265,153 +438,46 @@ const makePegasus = (zcf, board) => {
         details`Unimplemented protocol ${q(protocol)}; need "ics20-1"`,
       );
 
+      const c = await connectionP;
+      assert(
+        connectionToLocalDenomState.has(c),
+        details`The connection must use .createPegConnectionHandler()`,
+      );
+
       // Find our data elements.
       const endpoint = await E(connectionP).getLocalAddress();
       const denomUri = await getDenomUri(endpoint, remoteDenom, protocol);
 
-      const uriMatch = denomUri.match(/^ics20-1:(.*)$/);
-      assert(
-        uriMatch,
-        details`${denomUri} does not begin with ${q('ics20-1:')}`,
-      );
-      const prefixedDenom = uriMatch[1];
-
-      // Get the issuer for the local erights corresponding to the remote values.
+      // Create the issuer for the local erights corresponding to the remote values.
       const {
         issuer: localIssuer,
         mint: localMint,
         brand: localBrand,
       } = produceIssuer(denomUri, amountMathKind);
 
-      lastLocalIssuerNonce += 1;
-      const localIssuerKeyword = `Local${lastLocalIssuerNonce}`;
-      await zcf.addNewIssuer(localIssuer, localIssuerKeyword);
-      brandToIssuer.init(localBrand, localIssuer);
+      // Ensure the issuer can be used in Zoe offers.
+      await registerBrand(localBrand, localIssuer);
 
-      /**
-       * Convert an inbound packet to a local amount.
-       *
-       * @param {FungibleTransferPacket} packet
-       * @returns {Amount}
-       */
-      function packetToLocalAmount(packet) {
-        // packet.amount is a string in JSON.
-        const floatExtent = Number(packet.amount);
-
-        // If we overflow, or don't have a number, throw an exception!
-        const extent = Nat(floatExtent);
-
-        return harden({
-          brand: localBrand,
-          extent,
-        });
-      }
-
-      /**
-       * Convert the amount to a packet to send.
-       *
-       * @param {Amount} amount
-       * @param {DepositAddress} depositAddress
-       * @param {'FIXME:sender'} sender
-       * @returns {FungibleTransferPacket}
-       */
-      function localAmountToPacket(amount, depositAddress, sender) {
-        const { brand, extent } = amount;
-        assert(
-          brand === localBrand,
-          details`Brand must our local issuer's, not ${q(brand)}`,
-        );
-        const stringExtent = String(Nat(extent));
-
-        // Generate the ics20-1 packet.
-        return harden({
-          amount: stringExtent,
-          denomination: prefixedDenom,
-          receiver: depositAddress,
-          sender,
-        });
-      }
-
-      const c = await connectionP;
-      assert(
-        connectionsToDenomReceivers.has(c),
-        details`The connection must use .createPegConnectionHandler()`,
-      );
-
-      const denomUriToReceiver = connectionsToDenomReceivers.get(c);
-
-      /**
-       * Receive a packet, mint some shadow rights, and send to the depositAddress.
-       * @type {Receiver}
-       */
-      const receiver = async packet => {
-        // Look up the deposit facet for this board address, if there is one.
-        const depositAddress = packet.receiver;
-        const localAmount = packetToLocalAmount(packet);
-        const depositFacet = await E(board).getValue(depositAddress);
-
-        // Mint a local shadow right.
-        const payment = localMint.mintPayment(localAmount);
-
-        // Send to the deposit facet, if we can.
-        return E(depositFacet).receive(payment);
-      };
-
-      /* Register the receiver with the denomUri. */
-      denomUriToReceiver.init(denomUri, receiver);
-
-      /**
-       * The Courier transfers an outbound payment over the network.
-       *
-       * @type {Courier}
-       */
-      const courier = harden({
-        async transfer(paymentP, depositAddress) {
-          // Burn the payment, and create a packet to send.
-          const amount = await localIssuer.burn(paymentP);
-          const packet = localAmountToPacket(
-            amount,
-            depositAddress,
-            'FIXME:sender',
-          );
-          const packetBytes = JSON.stringify(packet);
-          return E(c)
-            .send(packetBytes)
-            .then(ack => {
-              // We got a response, so possible success.
-              const { success, error } = JSON.parse(ack);
-              if (!success) {
-                // Let the next catch handle this error.
-                throw error;
-              }
-              /** @type {TransferResult} */
-              const transferResult = {
-                success: true,
-              };
-              return transferResult;
-            })
-            .catch(error => {
-              // Not so bad, we can return a refund to the caller.
-              const refund = localMint.mintPayment(amount);
-              /** @type {TransferResult} */
-              const transferResult = {
-                success: false,
-                error,
-                refund,
-              };
-              return transferResult;
-            });
-        },
+      // Describe how to retain/redeem pegged shadow erights.
+      const courier = makeCourier({
+        connection: c,
+        board,
+        denomUri,
+        localIssuer,
+        localBrand,
+        retain: (payment, amount) =>
+          localIssuer.burn(localIssuer.claim(payment, amount)),
+        redeem: amount => E(localMint).mintPayment(amount),
       });
 
-      const denomUriToCourier = connectionsToDenomCouriers.get(c);
+      const { denomUriToCourier } = connectionToLocalDenomState.get(c);
       denomUriToCourier.init(denomUri, courier);
 
       /** @type {PegDescriptor} */
       const pegDescriptor = harden({
+        brand: localBrand,
         denomUri,
         endpoint,
-        brand: localBrand,
       });
 
       return pegDescriptor;
@@ -420,27 +486,64 @@ const makePegasus = (zcf, board) => {
     /**
      * Peg a local asset over a network connection.
      *
-     * @param {Connection|PromiseLike<Connection>} c The network connection (IBC channel) to communicate over
-     * @param {Issuer} issuer Local ERTP issuer whose assets should be pegged to c
+     * @param {Connection|PromiseLike<Connection>} connectionP The network connection (IBC channel) to communicate over
+     * @param {Issuer} localIssuer Local ERTP issuer whose assets should be pegged to c
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak on the connection
-     * @returns {Promise<[Courier,PegDescriptor]>}
+     * @returns {Promise<PegDescriptor>}
      */
-    pegLocal(c, issuer, protocol = DEFAULT_PROTOCOL) {
-      /** @type {Courier} */
-      const courier = harden({
-        transfer(payment, depositAddress) {
-          // TODO
-          return Promise.resolve();
-        },
+    async pegLocal(connectionP, localIssuer, protocol = DEFAULT_PROTOCOL) {
+      // Assertions
+      assert(
+        protocol === 'ics20-1',
+        details`Unimplemented protocol ${q(protocol)}; need "ics20-1"`,
+      );
+
+      const c = await connectionP;
+      assert(
+        connectionToLocalDenomState.has(c),
+        details`The connection must use .createPegConnectionHandler()`,
+      );
+
+      // We need the last nonce for our denom name.
+      const localDenomState = connectionToLocalDenomState.get(c);
+      localDenomState.lastNonce += 1;
+      const denom = `pegasus${localDenomState.lastNonce}`;
+
+      // Find our data elements.
+      const endpoint = await E(c).getLocalAddress();
+      const denomUri = await getDenomUri(endpoint, denom, protocol);
+
+      // Create a purse in which to keep our denomination.
+      const [backingPurse, localBrand] = await Promise.all([
+        E(localIssuer).makeEmptyPurse(),
+        E(localIssuer).getBrand(),
+      ]);
+
+      // Ensure the issuer can be used in Zoe offers.
+      await registerBrand(localBrand, localIssuer);
+
+      // Describe how to retain/redeem real local erights.
+      const courier = makeCourier({
+        connection: c,
+        board,
+        denomUri,
+        localIssuer,
+        localBrand,
+        retain: (payment, amount) => E(backingPurse).deposit(payment, amount),
+        redeem: amount => E(backingPurse).withdraw(amount),
       });
+
+      const { denomUriToCourier } = localDenomState;
+      denomUriToCourier.init(denomUri, courier);
+
       /** @type {PegDescriptor} */
       const pegDescriptor = harden({
-        // TODO
+        brand: localBrand,
         denomUri,
         endpoint,
-        issuer,
       });
-      return Promise.resolve(pegDescriptor);
+
+      return pegDescriptor;
     },
 
     /**
@@ -466,8 +569,8 @@ const makePegasus = (zcf, board) => {
         details`Brand is not a registered peg`,
       );
       const c = endpointToConnection.get(desc.endpoint);
-      const denomUriToCourier = connectionsToDenomCouriers.get(c);
-      const courier = denomUriToCourier.get(desc.denomUri);
+      const { denomUriToCourier } = connectionToLocalDenomState.get(c);
+      const { send } = denomUriToCourier.get(desc.denomUri);
 
       /**
        * @type {OfferHook}
@@ -488,7 +591,7 @@ const makePegasus = (zcf, board) => {
         });
 
         // Attempt the transfer, returning a refund if failed.
-        const { success, error, refund } = await courier.transfer(
+        const { success, error, refund } = await send(
           transferPaymentP,
           depositAddress,
         );
