@@ -11,6 +11,8 @@ import { E } from '@agoric/eventual-send';
 import Nat from '@agoric/nat';
 import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/multiaddr';
 
+import { makeZoeHelpers } from '@agoric/zoe/src/contractSupport';
+
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';
 const DEFAULT_PROTOCOL = 'ics20-1';
 
@@ -25,7 +27,23 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Connection} Connection
  * @typedef {import('@agoric/swingset-vat/src/vats/network').ConnectionHandler} ConnectionHandler
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Endpoint} Endpoint
+ * @typedef {import('@agoric/zoe').OfferHook} OfferHook
+ * @typedef {import('@agoric/zoe').OfferHandle} OfferHandle
+ * @typedef {import('@agoric/zoe').Keyword} Keyword
+ * @typedef {import('@agoric/zoe').ContractFacet} ContractFacet
+ * @typedef {import('@agoric/zoe').Invite} Invite
+ * @typedef {import('@agoric/zoe').OfferResultRecord} OfferResultRecord
  */
+
+/**
+ * @param {ContractFacet} zcf
+ * @returns {Promise<OfferResultRecord>}
+ */
+export function makeEmptyOfferWithResult(zcf) {
+  const invite = zcf.makeInvitation(_ => undefined, 'empty offer');
+  const zoe = zcf.getZoeService();
+  return E(zoe).offer(invite);
+}
 
 /**
  * @template K,V
@@ -44,7 +62,6 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {string} TransferProtocol
  *
  * @typedef {Object} PegDescriptor
- * @property {Issuer} issuer
  * @property {Brand} brand
  * @property {DenomUri} denomUri
  * @property {Endpoint} endpoint
@@ -109,17 +126,69 @@ async function getDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
 }
 
 /**
- * Create the public facet of the pegging contract.
- *
- * @param {{ getValue: (id: string) => any }} board
+ * @type {import('@agoric/zoe').MakeContract}
  */
-const makePegasus = board => {
+const makeContract = zcf => {
+  /**
+   * @type {{ board: { getValue: (id: string) => any }}}
+   */
+  const { board } = zcf.getInstanceRecord().terms;
+  const { checkHook, escrowAndAllocateTo } = makeZoeHelpers(zcf);
+
+  /**
+   * TODO: Add this to Zoe helpers!
+   * Extract a payment from a donorHandle.
+   *
+   * @param {{amount: Amount, keyword: Keyword, donorHandle: OfferHandle}} arg0
+   */
+  const unescrow = async ({ amount, keyword, donorHandle }) => {
+    const {
+      offerHandle: ourOfferHandle,
+      payout: ourPayoutP,
+    } = await makeEmptyOfferWithResult(zcf);
+
+    const originalAmount = zcf.getCurrentAllocation(donorHandle)[keyword];
+
+    // Take the payment from the donor.
+    const remaining = zcf
+      .getAmountMath(amount.brand)
+      .subtract(originalAmount, amount);
+    zcf.reallocate(
+      [donorHandle, ourOfferHandle],
+      [{ [keyword]: remaining }, { [keyword]: amount }],
+    );
+    zcf.complete(harden([ourOfferHandle]));
+
+    // Wait for the payout to get the payment promise.
+    const { [keyword]: paymentP } = await ourPayoutP;
+
+    // The caller can wait.
+    return paymentP;
+  };
+
+  /**
+   * @type {Store<Endpoint, Connection>}
+   */
+  const endpointToConnection = makeStore('Endpoint');
+
   /**
    * @type {WeakStore<Connection, Store<DenomUri, Receiver>>}
    */
   const connectionsToDenomReceivers = makeWeakStore('Connection');
 
-  return harden({
+  /**
+   * @type {WeakStore<Connection, Store<DenomUri, Courier>>}
+   */
+  const connectionsToDenomCouriers = makeWeakStore('Connection');
+
+  /**
+   * @type {WeakStore<Brand, Issuer>}
+   */
+  const brandToIssuer = makeWeakStore('Brand');
+
+  let lastLocalIssuerNonce = 0;
+
+  const publicAPI = harden({
     getDenomUri,
     /**
      * Return a handler that can be used with the Network API.
@@ -130,10 +199,14 @@ const makePegasus = board => {
        * @type {Store<DenomUri, Receiver>}
        */
       const denomUriToReceiver = makeStore('Denomination');
+      const denomUriToCourier = makeStore('Denomination');
       return {
-        async onOpen(c) {
+        async onOpen(c, localAddr) {
+          const endpoint = localAddr;
           // Register C with the table of Peg receivers.
           connectionsToDenomReceivers.init(c, denomUriToReceiver);
+          connectionsToDenomCouriers.init(c, denomUriToCourier);
+          endpointToConnection.init(endpoint, c);
         },
         async onReceive(c, packetBytes) {
           // Dispatch the packet to the appropriate Peg for this connection.
@@ -157,6 +230,7 @@ const makePegasus = board => {
         async onClose(c) {
           // Unregister C.  Pending transfers will be rejected.
           connectionsToDenomReceivers.delete(c);
+          connectionsToDenomCouriers.delete(c);
         },
       };
     },
@@ -167,7 +241,7 @@ const makePegasus = board => {
      * @param {Denom} remoteDenom Remote denomination
      * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged extents
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
-     * @returns {Promise<[Courier,PegDescriptor]>}
+     * @returns {Promise<PegDescriptor>}
      */
     async pegRemote(
       connectionP,
@@ -208,6 +282,11 @@ const makePegasus = board => {
         mint: localMint,
         brand: localBrand,
       } = produceIssuer(denomUri, amountMathKind);
+
+      lastLocalIssuerNonce += 1;
+      const localIssuerKeyword = `Local${lastLocalIssuerNonce}`;
+      await zcf.addNewIssuer(localIssuer, localIssuerKeyword);
+      brandToIssuer.init(localBrand, localIssuer);
 
       /**
        * Convert an inbound packet to a local amount.
@@ -325,14 +404,17 @@ const makePegasus = board => {
         },
       });
 
+      const denomUriToCourier = connectionsToDenomCouriers.get(c);
+      denomUriToCourier.init(denomUri, courier);
+
       /** @type {PegDescriptor} */
       const pegDescriptor = harden({
         denomUri,
         endpoint,
         brand: localBrand,
-        issuer: localIssuer,
       });
-      return Promise.resolve([courier, pegDescriptor]);
+
+      return pegDescriptor;
     },
 
     /**
@@ -358,32 +440,102 @@ const makePegasus = board => {
         endpoint,
         issuer,
       });
-      return Promise.resolve([courier, pegDescriptor]);
+      return Promise.resolve(pegDescriptor);
     },
 
     /**
-     * Look up a peg by brand.
-     *
+     * Find one of our registered issuers.
      * @param {Brand} brand
-     * @returns {PegDescriptor?}
+     * @returns {Promise<Issuer>}
      */
-    getPegByBrand(brand) {
-      // TODO
-      return undefined;
+    async getIssuer(brand) {
+      return brandToIssuer.get(brand);
     },
 
     /**
-     * Look up pegs by endpoint.
+     * Create a Zoe invite to transfer assets over desc to a deposit address.
      *
-     * @param {Endpoint} endpoint
-     * @returns {PegDescriptor[]}
+     * @param {PegDescriptor} desc
+     * @param {DepositAddress} depositAddress
+     * @returns {Promise<Invite>}
      */
-    getPegByEndpoint(endpoint) {
-      // TODO
-      return harden([]);
+    async makeInviteToTransfer(desc, depositAddress) {
+      // Validate the descriptor.
+      assert(
+        brandToIssuer.has(desc.brand),
+        details`Brand is not a registered peg`,
+      );
+      const c = endpointToConnection.get(desc.endpoint);
+      const denomUriToCourier = connectionsToDenomCouriers.get(c);
+      const courier = denomUriToCourier.get(desc.denomUri);
+
+      /**
+       * @type {OfferHook}
+       */
+      const offerHook = async offerHandle => {
+        const everything = zcf.getCurrentAllocation(offerHandle).Transfer;
+
+        assert(
+          everything.brand === desc.brand,
+          details`Transfer brand doesn't match this descriptor`,
+        );
+
+        // Fetch the transfer payment.
+        const transferPaymentP = unescrow({
+          amount: everything,
+          keyword: 'Transfer',
+          donorHandle: offerHandle,
+        });
+
+        // Attempt the transfer, returning a refund if failed.
+        const { success, error, refund } = await courier.transfer(
+          transferPaymentP,
+          depositAddress,
+        );
+
+        if (success) {
+          // They got what they wanted!
+          zcf.complete(harden([offerHandle]));
+          return;
+        }
+
+        if (!refund) {
+          // There's nothing we can do, since the transfer protocol
+          // failed to give us the refund.
+          zcf.complete(harden([offerHandle]));
+          throw error;
+        }
+
+        // Return the refund to the player.
+        await escrowAndAllocateTo({
+          amount: everything,
+          payment: refund,
+          keyword: 'Transfer',
+          recipientHandle: offerHandle,
+        });
+        zcf.complete(harden([offerHandle]));
+        throw error;
+      };
+
+      const transferExpected = harden({
+        give: {
+          Transfer: null,
+        },
+      });
+      return zcf.makeInvitation(
+        checkHook(offerHook, transferExpected),
+        'pegasus transfer',
+      );
     },
   });
+
+  zcf.initPublicAPI(publicAPI);
+
+  const adminHook = _offerHandle => {
+    return `no administrative capabilities`;
+  };
+  return zcf.makeInvitation(adminHook, 'admin');
 };
 
-harden(makePegasus);
-export default makePegasus;
+harden(makeContract);
+export { makeContract };
