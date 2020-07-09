@@ -142,10 +142,11 @@ const makePegasus = (zcf, board) => {
    */
   const unescrow = async ({ amount, keyword, donorHandle }) => {
     const {
-      offerHandle: ourOfferHandle,
+      offerHandle: ourOfferHandleP,
       payout: ourPayoutP,
     } = await makeEmptyOfferWithResult(zcf);
 
+    const ourOfferHandle = await ourOfferHandleP;
     const originalAmount = zcf.getCurrentAllocation(donorHandle)[keyword];
 
     // Take the payment from the donor.
@@ -528,6 +529,10 @@ const makePegasus = (zcf, board) => {
     },
   });
 };
+
+/**
+ * @typedef {ReturnType<typeof makePegasus>} Pegasus
+ */
 
 /**
  * @type {import('@agoric/zoe').MakeContract}

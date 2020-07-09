@@ -9,13 +9,19 @@ import {
   makeLoopbackProtocolHandler,
 } from '@agoric/swingset-vat/src/vats/network';
 
-import makePegasus from '../src/make-peg';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import bundleSource from '@agoric/bundle-source';
+
+import { makeZoe } from '@agoric/zoe';
+
+const contractPath = `${__dirname}/../src/pegasus`;
 
 /**
  * @param {import('tape-promise/tape').Test} t
  */
 async function testRemoteSendLocal(t) {
-  t.plan(6);
+  t.plan(7);
+
   /**
    * @type {import('@agoric/ertp').DepositFacet?}
    */
@@ -27,8 +33,24 @@ async function testRemoteSendLocal(t) {
     },
   });
 
+  const zoe = makeZoe();
+
+  // Get the Zoe invite issuer from Zoe.
+  const inviteIssuer = await E(zoe).getInviteIssuer();
+
+  // Pack the contract.
+  const contractBundle = await bundleSource(contractPath);
+  const installationHandle = await E(zoe).install(contractBundle);
+
+  const {
+    instanceRecord: { publicAPI },
+  } = await E(zoe).makeInstance(installationHandle, {}, { board });
+
+  /**
+   * @type {import('../src/pegasus').Pegasus}
+   */
+  const pegasus = publicAPI;
   const network = makeNetworkProtocol(makeLoopbackProtocolHandler(E));
-  const pegasus = makePegasus(board);
 
   const portP = E(network).bind('/ibc-channel/chanabc/ibc-port/portdef');
   const portName = await E(portP).getLocalAddress();
@@ -66,8 +88,9 @@ async function testRemoteSendLocal(t) {
   const chandler = E(pegasus).makePegConnectionHandler();
   const connP = E(portP).connect(portName, chandler);
 
-  const [courier, pegDesc] = await E(pegasus).pegRemote(connP, 'uatom');
-  const { issuer: localIssuer, brand: localBrand } = pegDesc;
+  const pegDesc = await E(pegasus).pegRemote(connP, 'uatom');
+  const { brand: localBrand } = pegDesc;
+  const localIssuer = await E(pegasus).getIssuer(localBrand);
 
   const localPurseP = E(localIssuer).makeEmptyPurse();
   localDepositFacet = await E(localPurseP).makeDepositFacet();
@@ -94,10 +117,29 @@ async function testRemoteSendLocal(t) {
     'we received the shadow atoms',
   );
 
-  const localAtomsP = E(localPurseP).withdraw(localAtomsAmount);
+  // FIXME: This should be able to be a promise for payment, but Zoe balks:
+  // [TypeError: deposit does not accept promises as first argument. Instead of passing the promise (deposit(paymentPromise)), consider unwrapping the promise first: paymentPromise.then(actualPayment => deposit(actualPayment))]
+  const localAtomsP = await E(localPurseP).withdraw(localAtomsAmount);
 
-  const transferResult = await E(courier).transfer(localAtomsP, 'markaccount');
-  t.deepEquals(transferResult, { success: true }, 'transfer is successful');
+  const transferInvite = await E(pegasus).makeInviteToTransfer(
+    pegDesc,
+    'markaccount',
+  );
+  const { outcome, payout } = await E(zoe).offer(
+    transferInvite,
+    harden({
+      give: { Transfer: localAtomsAmount },
+    }),
+    harden({ Transfer: localAtomsP }),
+  );
+  t.equals(await outcome, undefined, 'transfer is successful');
+
+  const paymentPs = await payout;
+  const refundAmount = await E(localIssuer).getAmountOf(paymentPs.Transfer);
+  const isEmptyRefund = await E(E(localIssuer).getAmountMath()).isEmpty(
+    refundAmount,
+  );
+  t.assert(isEmptyRefund, 'no refund from success');
 
   const stillIsLive = await E(localIssuer).isLive(localAtomsP);
   t.assert(!stillIsLive, 'payment is consumed');
