@@ -1,8 +1,6 @@
 # Pegasus
 
-*"Pegasus is the name, value transfer is what we do."* - https://peg-as.us
-
-(The source repository is at https://github.com/agoric/dapp-pegasus)
+*"Pegasus is the name, value transfer is what we do." - Team Pegasus*
 
 This is a decentralized app (Dapp) for pegging [Agoric](https://agoric.com) erights to or from remote assets via the [Agoric Network API](https://github.com/Agoric/agoric-sdk/blob/master/packages/SwingSet/docs/networking.md).  The Network API notably supports Javascript contracts using our dynamic version of the Inter-Blockchain Communication protocol ([IBC](https://cosmos.network/ibc)).
 
@@ -49,3 +47,8 @@ EXTENT=75 PURSE='Hard Earned Atoms' RECEIVER='cosmos1235566' agoric deploy ui/tr
 Accept the offer in your wallet.
 
 Check the Gaia side of things; you should have received your Atoms!
+
+# References
+
+https://github.com/agoric/dapp-pegasus
+https://peg-as.us
