@@ -57,10 +57,14 @@ It's interesting to note that the Atom erights you have can be used in other Ago
 So, Alice can put them up for sale as the configured Asset in a Simple Exchange Dapp:
 
 ```sh
-# Create the Simple Exchange Dapp.
-agoric deploy demo/simplex.js
+# Clone the Pegasus branch of Simple Exchange).
+git clone git://github.com/Agoric/dapp-simple-exchange -b pegasus
+# Install node dependencies.
+(cd dapp-simple-exchange && agoric install)
+# Run the deploy scripts.
+agoric deploy dapp-simple-exchange/contract/deploy.js dapp-simple-exchange/api/deploy.js
 # Run the simplex UI.
-(cd ../dapp-simple-exchange/ui && yarn start)
+(cd dapp-simple-exchange/ui && yarn start)
 ```
 
 Have Alice navigate to http://localhost:3000 and place an order to sell 75 of her Atoms in exchange for at least 190 moola.

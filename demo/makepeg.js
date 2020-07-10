@@ -72,14 +72,11 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
   const conn = await E(ibcport[0]).connect(GAIA_IBC_ADDRESS, chandler);
   const peg = await E(pegasus).pegRemote('Gaia ATOM', conn, 'atom');
 
-  // Save our peg for later work.
-  await E(scratch).set('gaiaPeg', peg);
-
   const localBrand = await E(peg).getLocalBrand();
   const localIssuer = await E(pegasus).getLocalIssuer(localBrand);
 
   const SHADOW_ISSUER = 'My ATOMs';
-  const SHADOW_PURSE = 'Atomz fer realz';
+  const SHADOW_PURSE = "Alice's Atoms";
 
   // Associate the issuer with a petname.
   await E(wallet).addIssuer(SHADOW_ISSUER, localIssuer);
