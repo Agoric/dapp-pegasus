@@ -40,7 +40,7 @@ async function gaiaTransfer({ port }) {
            * @type {FungibleTransferPacket}
            */
           const packet2 = {
-            amount: '100',
+            amount: packet.amount,
             denomination: prefixedDenom,
             receiver: packet.tap,
             sender: 'cosmos1xdecih3cyehciac96heocitece',

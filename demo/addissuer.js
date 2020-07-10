@@ -7,7 +7,6 @@
 
 import dappConstants from '../ui.old/public/conf/defaults';
 import { E } from '@agoric/eventual-send';
-import { assert, details, q } from '@agoric/assert';
 
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js
@@ -29,7 +28,7 @@ const {
  * available from REPL home
  * @param {DeployPowers} powers
  */
-export default async function deployTransfer(homePromise, { bundleSource, pathResolve }) {
+export default async function deployWallet(homePromise, { bundleSource, pathResolve }) {
 
   // Let's wait for the promise to resolve.
   const home = await homePromise;
@@ -43,8 +42,6 @@ export default async function deployTransfer(homePromise, { bundleSource, pathRe
     // access to it. The wallet stores purses and handles transactions.
     wallet, 
 
-    spawner,
-
     // *** ON-CHAIN REFERENCES ***
 
     // The registry lives on-chain, and is used to make private
@@ -52,6 +49,8 @@ export default async function deployTransfer(homePromise, { bundleSource, pathRe
     // assigned a unique string key. Given the key, other people can
     // access the object through the registry.
     registry,
+
+    uploads: scratch,
 
     zoe,
   } = home;
@@ -71,41 +70,28 @@ export default async function deployTransfer(homePromise, { bundleSource, pathRe
   /** @type {import('../contract/src/pegasus').Peg} */
   const peg = value[0];
 
-  const extent = JSON.parse(process.env.EXTENT || '0')
-  const pursePetname = process.env.PURSE || 'Hard Earned Atoms';
-  const RECEIVER = process.env.RECEIVER
+  const localBrand = await E(peg).getLocalBrand();
+  const localIssuer = await E(pegasus).getLocalIssuer(localBrand);
 
-  assert(RECEIVER, details`$RECEIVER must be set`);
+  let SHADOW_ISSUER = 'ATOMs I think';
+  const pursePetname = process.env.PURSE || "Bob's Atoms";
 
-  // Obtain the correct transfer parameters.
-  // Bundle up the hooks code
-  const bundle = await bundleSource(pathResolve('./src/transferOffer.js'));
-  
-  // Install it on the spawner
-  const transferInstall = E(spawner).install(bundle);
+  // Associate the issuer with a petname.
+  const already = await E(wallet).getIssuers();
+  const pnb = already.find(([petname, issuer]) => petname === SHADOW_ISSUER || issuer === localIssuer);
+  if (pnb) {
+    SHADOW_ISSUER = pnb[0];
+    console.log('Already have', SHADOW_ISSUER);
+  } else {
+    console.log('Adding issuer', SHADOW_ISSUER);
+    await E(wallet).addIssuer(SHADOW_ISSUER, localIssuer);
+  }
 
-  // Spawn the offer in the solo.
-  const offer = {
-    id: Date.now(),
-    instanceRegKey: INSTANCE_REG_KEY,
-    proposalTemplate: {
-      give: {
-        Transfer: {
-          pursePetname,
-          extent,
-        },
-      },
-    },
-  };
-
-  await E(transferInstall).spawn({
-    inviteMethod: 'makeInviteToTransfer',
-    inviteArgs: [peg, RECEIVER],
-    offer,
-    meta: { date: Date.now(), origin: '*pegasus transfer script*', },
-    wallet,
-  });
+  // Create an empty purse for that issuer, and give it a petname.
+  await E(wallet).makeEmptyPurse(SHADOW_ISSUER, pursePetname);
 
   // We are done!
-  console.log('Proposed transfer; check your wallet!');
+  console.log('INSTALLED in local wallet');
+  console.log(`Shadow issuer:`, SHADOW_ISSUER);
+  console.log(`Shadow purse:`, pursePetname);
 }

@@ -15,6 +15,7 @@ import { E } from '@agoric/eventual-send';
 // The contract's registry key for the assurance issuer.
 const {
   INSTANCE_REG_KEY,
+  GAIA_IBC_ADDRESS,
 } = dappConstants;
 
 /**
@@ -53,7 +54,11 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
     uploads: scratch,
 
     zoe,
+    ibcport: untypedPorts,
   } = home;
+
+  /** @type {import('@agoric/swingset-vat/src/vats/network').Port[]} */
+  const ibcport = untypedPorts;
 
   const instanceHandle = await E(registry).get(INSTANCE_REG_KEY);
   const { publicAPI } = await E(zoe).getInstanceRecord(instanceHandle);
@@ -63,35 +68,31 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
    */
   const pegasus = publicAPI;
 
-  const notifier = await E(pegasus).getNotifier();
-  const { value } = await E(notifier).getUpdateSince();
+  const chandler = await E(pegasus).makePegConnectionHandler();
+  const conn = await E(ibcport[0]).connect(GAIA_IBC_ADDRESS, chandler);
+  const peg = await E(pegasus).pegRemote('Gaia ATOM', conn, 'atom');
 
-  // FIXME: Don't just select the first peg.
-  /** @type {import('../contract/src/pegasus').Peg} */
-  const peg = value[0];
+  // Save our peg for later work.
+  await E(scratch).set('gaiaPeg', peg);
 
   const localBrand = await E(peg).getLocalBrand();
   const localIssuer = await E(pegasus).getLocalIssuer(localBrand);
 
-  let SHADOW_ISSUER = 'ATOMs I think';
-  const pursePetname = process.env.PURSE || 'Hard Earned Atoms';
+  const SHADOW_ISSUER = 'My ATOMs';
+  const SHADOW_PURSE = 'Atomz fer realz';
 
   // Associate the issuer with a petname.
-  const already = await E(wallet).getIssuers();
-  const pnb = already.find(([petname, issuer]) => petname === SHADOW_ISSUER || issuer === localIssuer);
-  if (pnb) {
-    SHADOW_ISSUER = pnb[0];
-    console.log('Already have', SHADOW_ISSUER);
-  } else {
-    console.log('Adding issuer', SHADOW_ISSUER);
-    await E(wallet).addIssuer(SHADOW_ISSUER, localIssuer);
-  }
+  await E(wallet).addIssuer(SHADOW_ISSUER, localIssuer);
 
   // Create an empty purse for that issuer, and give it a petname.
-  await E(wallet).makeEmptyPurse(SHADOW_ISSUER, pursePetname);
+  await E(wallet).makeEmptyPurse(SHADOW_ISSUER, SHADOW_PURSE);
+  const receiver = await E(wallet).addDepositFacet(SHADOW_PURSE);
+
+  // Actually transfer some atomz to us!
+  await E(conn).send(JSON.stringify({ tap: receiver, amount: '100' }));
 
   // We are done!
   console.log('INSTALLED in local wallet');
   console.log(`Shadow issuer:`, SHADOW_ISSUER);
-  console.log(`Shadow purse:`, pursePetname);
+  console.log(`Shadow purse:`, SHADOW_PURSE);
 }

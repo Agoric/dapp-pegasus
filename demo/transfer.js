@@ -7,6 +7,7 @@
 
 import dappConstants from '../ui.old/public/conf/defaults';
 import { E } from '@agoric/eventual-send';
+import { assert, details, q } from '@agoric/assert';
 
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js
@@ -15,7 +16,6 @@ import { E } from '@agoric/eventual-send';
 // The contract's registry key for the assurance issuer.
 const {
   INSTANCE_REG_KEY,
-  GAIA_IBC_ADDRESS,
 } = dappConstants;
 
 /**
@@ -29,7 +29,7 @@ const {
  * available from REPL home
  * @param {DeployPowers} powers
  */
-export default async function deployWallet(homePromise, { bundleSource, pathResolve }) {
+export default async function deployTransfer(homePromise, { bundleSource, pathResolve }) {
 
   // Let's wait for the promise to resolve.
   const home = await homePromise;
@@ -43,6 +43,8 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
     // access to it. The wallet stores purses and handles transactions.
     wallet, 
 
+    spawner,
+
     // *** ON-CHAIN REFERENCES ***
 
     // The registry lives on-chain, and is used to make private
@@ -51,14 +53,8 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
     // access the object through the registry.
     registry,
 
-    uploads: scratch,
-
     zoe,
-    ibcport: untypedPorts,
   } = home;
-
-  /** @type {import('@agoric/swingset-vat/src/vats/network').Port[]} */
-  const ibcport = untypedPorts;
 
   const instanceHandle = await E(registry).get(INSTANCE_REG_KEY);
   const { publicAPI } = await E(zoe).getInstanceRecord(instanceHandle);
@@ -68,31 +64,48 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
    */
   const pegasus = publicAPI;
 
-  const chandler = await E(pegasus).makePegConnectionHandler();
-  const conn = await E(ibcport[0]).connect(GAIA_IBC_ADDRESS, chandler);
-  const peg = await E(pegasus).pegRemote('Gaia ATOM', conn, 'atom');
+  const notifier = await E(pegasus).getNotifier();
+  const { value } = await E(notifier).getUpdateSince();
 
-  // Save our peg for later work.
-  await E(scratch).set('gaiaPeg', peg);
+  // FIXME: Don't just select the first peg.
+  /** @type {import('../contract/src/pegasus').Peg} */
+  const peg = value[0];
 
-  const localBrand = await E(peg).getLocalBrand();
-  const localIssuer = await E(pegasus).getLocalIssuer(localBrand);
+  const extent = JSON.parse(process.env.EXTENT || '0')
+  const pursePetname = process.env.PURSE || "Bob's Atoms";
+  const RECEIVER = process.env.RECEIVER
 
-  const SHADOW_ISSUER = 'My ATOMs';
-  const SHADOW_PURSE = 'Atomz fer realz';
+  assert(RECEIVER, details`$RECEIVER must be set`);
 
-  // Associate the issuer with a petname.
-  await E(wallet).addIssuer(SHADOW_ISSUER, localIssuer);
+  // Obtain the correct transfer parameters.
+  // Bundle up the hooks code
+  const bundle = await bundleSource(pathResolve('./src/transferOffer.js'));
+  
+  // Install it on the spawner
+  const transferInstall = E(spawner).install(bundle);
 
-  // Create an empty purse for that issuer, and give it a petname.
-  await E(wallet).makeEmptyPurse(SHADOW_ISSUER, SHADOW_PURSE);
-  const receiver = await E(wallet).addDepositFacet(SHADOW_PURSE);
+  // Spawn the offer in the solo.
+  const offer = {
+    id: Date.now(),
+    instanceRegKey: INSTANCE_REG_KEY,
+    proposalTemplate: {
+      give: {
+        Transfer: {
+          pursePetname,
+          extent,
+        },
+      },
+    },
+  };
 
-  // Actually transfer some atomz to us!
-  await E(conn).send(JSON.stringify({ tap: receiver }));
+  await E(transferInstall).spawn({
+    inviteMethod: 'makeInviteToTransfer',
+    inviteArgs: [peg, RECEIVER],
+    offer,
+    meta: { date: Date.now(), origin: '*pegasus transfer script*', },
+    wallet,
+  });
 
   // We are done!
-  console.log('INSTALLED in local wallet');
-  console.log(`Shadow issuer:`, SHADOW_ISSUER);
-  console.log(`Shadow purse:`, SHADOW_PURSE);
+  console.log('Proposed transfer; check your wallet!');
 }
