@@ -6,7 +6,11 @@ This is a decentralized app (Dapp) for pegging [Agoric](https://agoric.com) erig
 
 We currently use the Interchain Standard fungible asset transfer protocol ([ics20-1](https://github.com/cosmos/ics/tree/master/spec/ics-020-fungible-token-transfer)) concrete JSON representation at the packet data layer.  This combination supports compatibility with conforming ICS20 implementations such as pegging [Cosmos](https://cosmos.network) Atoms via IBC to (an upcoming version of) the Gaia hub.
 
-See the [detailed documentation](https://docs.google.com/document/d/1m62GfGBxt0RhLx0x9qZJ907uEUsXYY4BRu-JsPhZ620/edit)
+See also:
+
+* [peg-as.us website](https://peg-as.us)
+* [dapp-pegasus GitHub Repository](https://github.com/agoric/dapp-pegasus)
+* [detailed project documentation](https://docs.google.com/document/d/1m62GfGBxt0RhLx0x9qZJ907uEUsXYY4BRu-JsPhZ620/edit)
 
 # Demo
 
@@ -116,7 +120,6 @@ Finally, check Bob's Gaia account; he should have 20 more Atoms in his balance!
 
 *For the demo simulation, this will mean that a transfer message to Gaia is printed on the `agoric start` console (the `local-chain` logs for multiuser).*
 
-# References
+# Conclusion
 
-https://github.com/agoric/dapp-pegasus
-https://peg-as.us
+We had fun creating the Agoric Pegasus contract and demo as part of an internal Agoric hackathon (July 6th-10th, 2020).
