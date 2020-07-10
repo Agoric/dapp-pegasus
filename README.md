@@ -1,27 +1,28 @@
 # Pegasus
 
-*"Pegasus is the name, value transfer is what we do." - Team Pegasus*
+**If you want to transfer value, why not peg-as-us?**
 
-This is a decentralized app (Dapp) for pegging [Agoric](https://agoric.com) erights to or from remote assets via the [Agoric Network API](https://github.com/Agoric/agoric-sdk/blob/master/packages/SwingSet/docs/networking.md).  The Network API notably supports Javascript contracts using our dynamic version of the Inter-Blockchain Communication protocol ([IBC](https://cosmos.network/ibc)).
+This is a decentralized app (_Dapp_) for pegging/transferring [Agoric](https://agoric.com) erights to or from remote assets via the [Agoric Network API](https://github.com/Agoric/agoric-sdk/blob/master/packages/SwingSet/docs/networking.md).  The Network API notably allows smart contracts written in Javascript to communicate between blockchains via _dIBC_ (our dynamic flavour of [IBC](https://cosmos.network/ibc), the Inter-Blockchain Communication protocol).
 
-We currently use the Interchain Standard fungible asset transfer protocol ([ics20-1](https://github.com/cosmos/ics/tree/master/spec/ics-020-fungible-token-transfer)) concrete JSON representation at the packet data layer.  This combination supports compatibility with conforming ICS20 implementations such as pegging [Cosmos](https://cosmos.network) Atoms via IBC to (an upcoming version of) the Gaia hub.
+Pegasus currently uses the packet data JSON format of the Interchain Standard fungible asset transfer protocol ([ics20-1](https://github.com/cosmos/ics/tree/master/spec/ics-020-fungible-token-transfer)).  The combination of ICS20 and IBC provides compatibility with any conforming implementation such as pegging [Cosmos](https://cosmos.network) Atoms via (an upcoming version of) the Gaia hub.
 
-See also:
+## References
 
 * [peg-as.us website](https://peg-as.us)
+* [Agoric's secure smart contracts in Javascript](https://agoric.com)
 * [dapp-pegasus GitHub Repository](https://github.com/agoric/dapp-pegasus)
-* [detailed project documentation](https://docs.google.com/document/d/1m62GfGBxt0RhLx0x9qZJ907uEUsXYY4BRu-JsPhZ620/edit)
+* [Team Pegasus hackathon writeup](https://docs.google.com/document/d/1m62GfGBxt0RhLx0x9qZJ907uEUsXYY4BRu-JsPhZ620/edit)
+* Agoric's [getting started documentation](https://agoric.com/documentation/getting-started/)
 
 # Demo
 
-Please note that the Pegasus Dapp UI has not yet been created (we were 
-missing some critical infrastructure at the time of the hackathon).
-Instead, we will use "agoric deploy scripts" to add peg issuers and transfer
-them.
+**CAVEAT: Please note that the Pegasus Dapp UI has not yet been created (we were missing some crucial wallet features at the time of the hackathon).**
+
+Instead, we will use "agoric deploy scripts" to expose issuers to the Agoric wallet, create pegs, and request Zoe invites to transfer assets over them.
 
 ## Number of Wallets
 
-You can run this demo locally in either multiuser mode (separate wallets for Alice and Bob), or in single-user mode (one wallet shared between them).
+You can run this demo locally in either multiuser mode (separate wallets for Alice and Bob), or in single-user mode (one wallet shared between them).  We recommend familiarising yourself with Agoric's (getting started documentation)[https://agoric.com/documentation/getting-started/].
 
 **EITHER:**
 
@@ -120,6 +121,6 @@ Finally, check Bob's Gaia account; he should have 20 more Atoms in his balance!
 
 *For the demo simulation, this will mean that a transfer message to Gaia is printed on the `agoric start` console (the `local-chain` logs for multiuser).*
 
-# Conclusion
+# History
 
-We had fun creating the Agoric Pegasus contract and demo as part of an internal Agoric hackathon (July 6th-10th, 2020).
+* 2020-06-10 - created the Agoric Pegasus contract and first demo (Agoric internal hackathon July 6th-10th, 2020).
