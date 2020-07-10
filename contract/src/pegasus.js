@@ -53,9 +53,9 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {string} TransferProtocol
  *
  * @typedef {Object} Peg
- * @property {() => string} getAllegedName
- * @property {() => Brand} getLocalBrand
- * @property {() => DenomUri} getDenomUri
+ * @property {() => string} getAllegedName get the debug name
+ * @property {() => Brand} getLocalBrand get the brand associated with the peg
+ * @property {() => DenomUri} getDenomUri get the denomination identifier
  *
  * @typedef {Object} PegDescriptor
  * @property {Brand} localBrand
@@ -65,7 +65,7 @@ const DEFAULT_PROTOCOL = 'ics20-1';
 
 /**
  * @typedef {Object} BoardDepositFacet a registry for depositAddresses
- * @property {(id: DepositAddress) => any} getValue return the corresponding
+ * @property {(id: string) => any} getValue return the corresponding DepositFacet
  */
 
 /**
@@ -111,7 +111,9 @@ async function makeDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
         const protoPort = pairs.find(([proto]) => proto === 'ibc-port');
         assert(protoPort, details`Cannot find IBC port in ${endpoint}`);
 
-        const protoChannel = pairs.find(([proto]) => proto === 'ibc-channel');
+        // FIXME: We really should get this from the actual endpoint.
+        const FIXME_FAKE_CHANNEL = ['ibc-channel', 'transfer'];
+        const protoChannel = pairs.find(([proto]) => proto === 'ibc-channel') || FIXME_FAKE_CHANNEL;
         assert(protoChannel, details`Cannot find IBC channel in ${endpoint}`);
 
         const port = protoPort[1];
@@ -403,6 +405,7 @@ const makePegasus = (zcf, board) => {
           for (const peg of pegs.keys()) {
             pegToConnection.delete(peg);
           }
+          updater.updateState([...pegToConnection.keys()]);
         },
       };
     },
@@ -564,9 +567,9 @@ const makePegasus = (zcf, board) => {
     /**
      * Create a Zoe invite to transfer assets over network to a deposit address.
      *
-     * @param {Peg|Promise<Peg>} pegP
-     * @param {DepositAddress} depositAddress
-     * @returns {Promise<Invite>}
+     * @param {Peg|Promise<Peg>} pegP the peg over which to transfer
+     * @param {DepositAddress} depositAddress the remote receiver's address
+     * @returns {Promise<Invite>} to transfer, make an offer of { give: { Transfer: pegAmount } } to this invite
      */
     async makeInviteToTransfer(pegP, depositAddress) {
       // Verify the peg.
@@ -661,6 +664,7 @@ const makeContract = zcf => {
   return zcf.makeInvitation(adminHook, 'admin');
 };
 
+harden(makeDenomUri);
 harden(makeContract);
 harden(makePegasus);
-export { makeContract, makePegasus };
+export { makeContract, makePegasus, makeDenomUri };

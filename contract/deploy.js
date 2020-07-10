@@ -48,7 +48,7 @@ export default async function deployContract(
   // and install it on Zoe. This returns an installationHandle, an
   // opaque, unforgeable identifier for our contract code that we can
   // reuse again and again to create new, live contract instances.
-  const bundle = await bundleSource(pathResolve(`./src/contract.js`));
+  const bundle = await bundleSource(pathResolve(`./src/pegasus.js`));
   const installationHandle = await E(zoe).install(bundle);
 
   // Let's share this installationHandle with other people, so that
@@ -62,7 +62,7 @@ export default async function deployContract(
   // strings to objects. We will need to provide a starting name when
   // we register our installationHandle, and the registry will add a
   // suffix creating a guaranteed unique name.
-  const CONTRACT_NAME = 'peg';
+  const CONTRACT_NAME = 'pegasus';
   const INSTALLATION_REG_KEY = await E(registry).register(
     `${CONTRACT_NAME}installation`,
     installationHandle,
@@ -77,7 +77,7 @@ export default async function deployContract(
     INSTALLATION_REG_KEY,
   };
   const defaultsFile = pathResolve(
-    `../ui/public/conf/installationConstants.js`,
+    `../ui.old/public/conf/installationConstants.js`,
   );
   console.log('writing', defaultsFile);
   const defaultsContents = `\

@@ -1,67 +1,39 @@
 # Example
 
-```js
-// someone asked Peg for an IBC channel to carry `uatom`
-const connection = home.ibcPort[1]~.connect(...);
-await peg~.pegRemote(connection, 'uatom')
+## First User
+
+```sh
+# ...
+agoric start
+# Set up the demo environment in your ag-solo.
+agoric deploy contract/deploy.js api/deploy.js
 ```
 
-```
-# Alice makes a transfer of $100ATOM from Gaia to Alice's Agoric Wallet (0x1234=BoardEntryID)
-# rly tx xfer gaia agoric 1000000000uatom 0x1234 true
-# gaiacli tx transfer transfer transferport xferchannel now+1000blocks 0x1234 100000000uatomAliceG -> AliceA: $100 Atom
-# Alice uses SimpleExchange to sell $100 Atom for 200 Moola
-AliceA -> SimpleEx: $100 Atom
-BobA -> SimpleEx: 200 Moola
-SimpleEx -> AliceA: 200 Moola
-SimpleEx -> BobA: $100 Atom
-# Bob transfers the $100 Atom to his Gaia account
-# peg~.send(payment, 'cosmos19uhd9037idh3298673902dhi93')
-BobA -> BobG: $100 Atom
+In the Wallet/REPL at http://localhost:8000, notice that you have no Atoms.
+
+```sh
+# Create the peg to Gaia atoms, and immediately tap the faucet to get some.
+agoric deploy ui/makepeg.js
 ```
 
-## Design
+In the Wallet, notice that you have Atoms.
 
-One Agoric IBC Port, many Agoric IBC Channels connected to other chains
+You can put them up for sale, and use them in any kind of exchange.
 
-One Agoric IBC Channel, many remote denoms ("denomination codes")
+## Second user
 
-Each remote denom has exactly one local Agoric issuer
-
-First, open a network connection (such as dIBC), then:
-
-This contract:
-1. Root on IBC, shadow on Agoric:
-  a. for a given network connection, register the remote denom (computed from IBC address),
-  b. create a backing issuer to mint/burn on Agoric
-  c. register that issuer with the Board, and allow wallets to install the issuer
-  d. internal mapping of channel receiver to peg, and sent brand to peg
-
-2. Root on Agoric, shadow on IBC:
-  a. for a given network connection, register an Agoric issuer
-  b. generate a name for the IBC denom(ination) `${ibcPortId}/${ibcChannelId}/${nonce}`
-  c. create a "backing purse", etc.
-  d. handle .sendVia escrow, and .receive unescrow, then message network
-  
-Contract Public API:
-
-```js
-peg.send(payment, destAddress)
-peg.sendVia(payment, destAddress, viaNetworkAddress)
-peg.pegIssuer(connection, agoricIssuer)
-peg.pegRemote(connection, denom, mathName = 'nat')
-/**
- * @typedef {Object} RemotePeg
- * @property 
- */
-const { issuer, denom, networkAddress } = peg.getRemoteByBrand(issuerBrand)
-const { issuer, denom, networkAddress } = peg.getRemoteByAddress(denom, networkAddress)
-const { denom, }
+```sh
+# Register petnames for the Atom issuer in your wallet:
+agoric deploy ui/deploy.js
 ```
 
-Internal API for each Peg:
+Obtain some Atoms on Agoric, via an exchange of some kind.
 
-```js
-pegAtom.receive(extent, destBoardEntryId)
-pegAtom.send(payment, destAddress)
+```sh
+# Construct an offer to transfer back to Gaia in the REPL:
+EXTENT=75 PURSE='Hard Earned Atoms' RECEIVER='cosmos1235566' agoric deploy ui/transfer.js
 ```
+
+Accept the offer in your wallet.
+
+Check the Gaia side of things; you should have received your Atoms!
