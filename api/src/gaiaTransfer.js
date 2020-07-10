@@ -9,7 +9,7 @@ import { makeDenomUri } from '../../contract/src/pegasus';
 /**
  * @param {{port: Port}} arg0
  */
-async function gaiaFaucet({ port }) {
+async function gaiaTransfer({ port }) {
   // Create a network object and corresponding peg.
   E(port).addListener({
     async onAccept() {
@@ -17,22 +17,19 @@ async function gaiaFaucet({ port }) {
       return harden({
         async onOpen(c, localAddr, remoteAddr) {
           raddr = remoteAddr;
-          console.info('Gaia faucet connection from', remoteAddr);
+          console.info('Gaia transfer connection from', remoteAddr);
         },
         async onReceive(c, packetBytes) {
-          console.info('Received inbound Gaia request', packetBytes);
-
+          console.info('='.repeat(50));
           const packet = JSON.parse(packetBytes);
           if (packet.tap === undefined) {
             // Give success as a transfer result.
-            console.info(`\
-=======================
-TRANSFER SUCCESS FOR ${packet.amount}${packet.denomination} TO ${receiver}
-=======================
-`)
-            return JSON.stringify({
+            const ack = JSON.stringify({
               success: true,
             });
+            console.info('Gaia transfer RECEIVE:', packet);
+            console.info('Gaia transfer ack:', ack);
+            return ack;
           }
 
           // For demo!
@@ -42,18 +39,23 @@ TRANSFER SUCCESS FOR ${packet.amount}${packet.denomination} TO ${receiver}
           /**
            * @type {FungibleTransferPacket}
            */
-          const transferPacket = {
-            amount: 100,
+          const packet2 = {
+            amount: '100',
             denomination: prefixedDenom,
             receiver: packet.tap,
             sender: 'cosmos1xdecih3cyehciac96heocitece',
-          }
-          return E(c).send(JSON.stringify(transferPacket));
+          };
+          const packetBytes2 = JSON.stringify(packet2);
+
+          console.info('Gaia transfer SEND:', packet2);
+          const ack = await E(c).send(packetBytes2);
+          console.info('Gaia transfer ack:', ack);
+          return ack;
         },
       });
     },
   });
 }
 
-harden(gaiaFaucet);
-export default gaiaFaucet;
+harden(gaiaTransfer);
+export default gaiaTransfer;
