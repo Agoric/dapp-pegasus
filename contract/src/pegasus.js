@@ -20,11 +20,11 @@ const DEFAULT_AMOUNT_MATH_KIND = 'nat';
 const DEFAULT_PROTOCOL = 'ics20-1';
 
 /**
- * @typedef {import('@agoric/ertp/src/issuer').Amount} Amount
- * @typedef {import('@agoric/ertp/src/issuer').Brand} Brand
- * @typedef {import('@agoric/ertp/src/issuer').Issuer} Issuer
- * @typedef {import('@agoric/ertp/src/issuer').Payment} Payment
- * @typedef {import('@agoric/ertp/src/issuer').PaymentP} PaymentP
+ * @typedef {import('@agoric/ertp').Amount} Amount
+ * @typedef {import('@agoric/ertp').Brand} Brand
+ * @typedef {import('@agoric/ertp').Issuer} Issuer
+ * @typedef {import('@agoric/ertp').Payment} Payment
+ * @typedef {import('@agoric/ertp').PaymentP} PaymentP
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Bytes} Bytes
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Data} Data
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Connection} Connection

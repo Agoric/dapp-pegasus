@@ -6,7 +6,7 @@
 import { E } from '@agoric/eventual-send';
 
 /**
- * @typedef {import('@agoric/ertp/src/issuer').Amount} Amount
+ * @typedef {import('@agoric/ertp').Amount} Amount
  * @typedef {import('@agoric/zoe').ContractFacet} ContractFacet
  * @typedef {import('@agoric/zoe').Keyword} Keyword
  * @typedef {import('@agoric/zoe').OfferHandle} OfferHandle
