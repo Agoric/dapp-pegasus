@@ -12,7 +12,7 @@ Pegasus currently uses the packet data JSON format of the Interchain Standard fu
 * [Agoric's secure smart contracts in Javascript](https://agoric.com)
 * [dapp-pegasus GitHub Repository](https://github.com/agoric/dapp-pegasus)
 * [Team Pegasus hackathon writeup](https://docs.google.com/document/d/1m62GfGBxt0RhLx0x9qZJ907uEUsXYY4BRu-JsPhZ620/edit)
-* Agoric's [getting started documentation](https://agoric.com/documentation/getting-started/)
+* [Agoric's getting started documentation](https://agoric.com/documentation/getting-started/)
 
 # Demo
 

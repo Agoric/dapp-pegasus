@@ -25,7 +25,6 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {import('@agoric/ertp/src/issuer').Issuer} Issuer
  * @typedef {import('@agoric/ertp/src/issuer').Payment} Payment
  * @typedef {import('@agoric/ertp/src/issuer').PaymentP} PaymentP
- * @typedef {import('@agoric/notifier').Notifier} Notifier
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Bytes} Bytes
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Data} Data
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Connection} Connection
@@ -90,6 +89,11 @@ const DEFAULT_PROTOCOL = 'ics20-1';
  * @typedef {Object} Courier
  * @property {Sender} send
  * @property {Receiver} receive
+ */
+
+/**
+ * @template T
+ * @typedef {import('@agoric/notifier').Notifier<T>} Notifier<T>
  */
 
 /**
@@ -287,7 +291,8 @@ const makePegasus = (zcf, board) => {
   const { checkHook, escrowAndAllocateTo } = makeZoeHelpers(zcf);
   const { unescrow } = makeOurZoeHelpers(zcf);
 
-  const { notifier, updater } = produceNotifier();
+  /** @type {import('@agoric/notifier').NotifierRecord<Peg[]>} */
+  const { notifier, updater } = produceNotifier([]);
 
   /**
    * @typedef {Object} LocalDenomState
@@ -524,7 +529,7 @@ const makePegasus = (zcf, board) => {
       // Create a purse in which to keep our denomination.
       const [backingPurse, localBrand] = await Promise.all([
         E(localIssuer).makeEmptyPurse(),
-        E(localIssuer).getLocalBrand(),
+        E(localIssuer).getBrand(),
       ]);
 
       // Ensure the issuer can be used in Zoe offers.
@@ -558,7 +563,6 @@ const makePegasus = (zcf, board) => {
 
     /**
      * Get all the created pegs.
-     * @returns {Promise<Notifier>}
      */
     async getNotifier() {
       return notifier;

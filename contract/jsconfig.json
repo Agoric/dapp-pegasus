@@ -5,6 +5,7 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "downlevelIteration": true,
+    "strictNullChecks": true,
   },
   "include": ["src/*.js"],
 }
