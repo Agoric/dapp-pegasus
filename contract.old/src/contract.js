@@ -1,7 +1,7 @@
 // @ts-check
 import harden from '@agoric/harden';
 import produceIssuer from '@agoric/ertp';
-import { produceNotifier } from '@agoric/notifier';
+import { makeNotifierKit } from '@agoric/notifier';
 import { makeZoeHelpers } from '@agoric/zoe/src/contractSupport/zoeHelpers';
 
 /**
@@ -16,7 +16,7 @@ const makeContract = zcf => {
     basic: `You're doing great!`,
     premium: `Wow, just wow. I have never seen such talent!`,
   };
-  const { notifier, updater } = produceNotifier();
+  const { notifier, updater } = makeNotifierKit(undefined);
   let adminOfferHandle;
 
   const { escrowAndAllocateTo, rejectOffer } = makeZoeHelpers(zcf);
