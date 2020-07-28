@@ -32,7 +32,7 @@ export default harden(({ publicAPI, http }, _inviteMaker) => {
 
     // Wait until the next notification resolves.
     E(notifier)
-      .getUpdateSince(updateResponse.updateHandle)
+      .getUpdateSince(updateResponse.updateCount)
       .then(doOneNotification, fail);
   };
 
@@ -60,7 +60,7 @@ export default harden(({ publicAPI, http }, _inviteMaker) => {
           // These are messages we receive from either POST or WebSocket.
           switch (obj.type) {
             case 'encouragement/getEncouragement': {
-              
+
               return harden({
                 type: 'encouragement/getEncouragementResponse',
                 instanceRegKey: undefined,
@@ -69,7 +69,7 @@ export default harden(({ publicAPI, http }, _inviteMaker) => {
             }
 
             case 'encouragement/subscribeNotifications': {
-              
+
               return harden({
                 type: 'encouragement/subscribeNotificationsResponse',
                 data: true,

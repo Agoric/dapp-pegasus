@@ -5,7 +5,7 @@
 
 import { assert, details, q } from '@agoric/assert';
 import produceIssuer from '@agoric/ertp';
-import { produceNotifier } from '@agoric/notifier';
+import { makeNotifierKit } from '@agoric/notifier';
 import makeStore from '@agoric/store';
 import makeWeakStore from '@agoric/weak-store';
 import { E } from '@agoric/eventual-send';
@@ -292,7 +292,7 @@ const makePegasus = (zcf, board) => {
   const { unescrow } = makeOurZoeHelpers(zcf);
 
   /** @type {import('@agoric/notifier').NotifierRecord<Peg[]>} */
-  const { notifier, updater } = produceNotifier([]);
+  const { notifier, updater } = makeNotifierKit([]);
 
   /**
    * @typedef {Object} LocalDenomState
