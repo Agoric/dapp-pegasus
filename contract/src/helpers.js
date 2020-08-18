@@ -1,17 +1,6 @@
 // @ts-check
 
-// eslint-disable-next-line spaced-comment
-/// <reference types="ses"/>
-
 import { E } from '@agoric/eventual-send';
-
-/**
- * @typedef {import('@agoric/ertp').Amount} Amount
- * @typedef {import('@agoric/zoe').ContractFacet} ContractFacet
- * @typedef {import('@agoric/zoe').Keyword} Keyword
- * @typedef {import('@agoric/zoe').OfferHandle} OfferHandle
- * @typedef {import('@agoric/zoe').OfferResultRecord} OfferResultRecord
- */
 
 /**
  * @param {ContractFacet} zcf the Zoe Contract Facet

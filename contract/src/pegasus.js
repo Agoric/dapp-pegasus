@@ -1,8 +1,5 @@
 // @ts-check
 
-// eslint-disable-next-line spaced-comment
-/// <reference types="ses"/>
-
 import { assert, details, q } from '@agoric/assert';
 import produceIssuer from '@agoric/ertp';
 import { makeNotifierKit } from '@agoric/notifier';
@@ -16,85 +13,10 @@ import { makeZoeHelpers } from '@agoric/zoe/src/contractSupport';
 
 import { makeZoeHelpers as makeOurZoeHelpers } from './helpers';
 
+import '../exported';
+
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';
 const DEFAULT_PROTOCOL = 'ics20-1';
-
-/**
- * @typedef {import('@agoric/ertp').Amount} Amount
- * @typedef {import('@agoric/ertp').Brand} Brand
- * @typedef {import('@agoric/ertp').Issuer} Issuer
- * @typedef {import('@agoric/ertp').Payment} Payment
- * @typedef {import('@agoric/ertp').PaymentP} PaymentP
- * @typedef {import('@agoric/swingset-vat/src/vats/network').Bytes} Bytes
- * @typedef {import('@agoric/swingset-vat/src/vats/network').Data} Data
- * @typedef {import('@agoric/swingset-vat/src/vats/network').Connection} Connection
- * @typedef {import('@agoric/swingset-vat/src/vats/network').ConnectionHandler} ConnectionHandler
- * @typedef {import('@agoric/swingset-vat/src/vats/network').Endpoint} Endpoint
- * @typedef {import('@agoric/zoe').OfferHook} OfferHook
- * @typedef {import('@agoric/zoe').ContractFacet} ContractFacet
- * @typedef {import('@agoric/zoe').Invite} Invite
- */
-
-/**
- * @template K,V
- * @typedef {import('@agoric/store').Store<K,V>} Store<K,V>
- */
-
-/**
- * @template K,V
- * @typedef {import('@agoric/weak-store').WeakStore<K,V>} WeakStore<K,V>
- */
-
-/**
- * @typedef {string} DenomUri
- * @typedef {string} Denom
- * @typedef {string} DepositAddress
- * @typedef {string} TransferProtocol
- *
- * @typedef {Object} Peg
- * @property {() => string} getAllegedName get the debug name
- * @property {() => Brand} getLocalBrand get the brand associated with the peg
- * @property {() => DenomUri} getDenomUri get the denomination identifier
- *
- * @typedef {Object} PegDescriptor
- * @property {Brand} localBrand
- * @property {DenomUri} denomUri
- * @property {string} allegedName
- */
-
-/**
- * @typedef {Object} BoardDepositFacet a registry for depositAddresses
- * @property {(id: string) => any} getValue return the corresponding DepositFacet
- */
-
-/**
- * @typedef {Object} FungibleTransferPacket
- * @property {string} amount The extent of the amount
- * @property {Denom} denomination The denomination of the amount
- * @property {string} [sender] The sender address
- * @property {DepositAddress} receiver The receiver deposit address
- */
-
-/**
- * @typedef {Object} TransferResult
- * @property {boolean} success True if the transfer was successful
- * @property {any} [error] The description of the error
- * @property {Payment} [refund] The refund if the transfer is known to have failed
- */
-
-/**
- * @typedef {(payment: PaymentP, depositAddress: DepositAddress) => Promise<TransferResult>} Sender
- * Successive transfers are not guaranteed to be processed in the order in which they were sent.
- * @typedef {(packet: FungibleTransferPacket) => Promise<unknown>} Receiver
- * @typedef {Object} Courier
- * @property {Sender} send
- * @property {Receiver} receive
- */
-
-/**
- * @template T
- * @typedef {import('@agoric/notifier').Notifier<T>} Notifier<T>
- */
 
 /**
  * Get the denomination combined with the network address.
@@ -117,7 +39,9 @@ async function makeDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
 
         // FIXME: We really should get this from the actual endpoint.
         const FIXME_FAKE_CHANNEL = ['ibc-channel', 'transfer'];
-        const protoChannel = pairs.find(([proto]) => proto === 'ibc-channel') || FIXME_FAKE_CHANNEL;
+        const protoChannel =
+          pairs.find(([proto]) => proto === 'ibc-channel') ||
+          FIXME_FAKE_CHANNEL;
         assert(protoChannel, details`Cannot find IBC channel in ${endpoint}`);
 
         const port = protoPort[1];
@@ -145,14 +69,14 @@ function makeICS20Converter(localBrand, prefixedDenom) {
    */
   function packetToLocalAmount(packet) {
     // packet.amount is a string in JSON.
-    const floatExtent = Number(packet.amount);
+    const floatValue = Number(packet.amount);
 
     // If we overflow, or don't have a number, throw an exception!
-    const extent = Nat(floatExtent);
+    const value = Nat(floatValue);
 
     return harden({
       brand: localBrand,
-      extent,
+      value,
     });
   }
 
@@ -164,16 +88,16 @@ function makeICS20Converter(localBrand, prefixedDenom) {
    * @returns {FungibleTransferPacket}
    */
   function localAmountToPacket(amount, depositAddress) {
-    const { brand, extent } = amount;
+    const { brand, value } = amount;
     assert(
       brand === localBrand,
       details`Brand must our local issuer's, not ${q(brand)}`,
     );
-    const stringExtent = String(Nat(extent));
+    const stringValue = String(Nat(value));
 
     // Generate the ics20-1 packet.
     return harden({
-      amount: stringExtent,
+      amount: stringValue,
       denomination: prefixedDenom,
       receiver: depositAddress,
     });
@@ -654,7 +578,7 @@ const makePegasus = (zcf, board) => {
  */
 
 /**
- * @type {import('@agoric/zoe').MakeContract}
+ * @param {ContractFacet} zcf
  */
 const makeContract = zcf => {
   const { board } = zcf.getInstanceRecord().terms;
