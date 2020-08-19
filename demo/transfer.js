@@ -99,8 +99,8 @@ export default async function deployTransfer(homePromise, { bundleSource, pathRe
   };
 
   await E(transferInstall).spawn({
-    inviteMethod: 'makeInviteToTransfer',
-    inviteArgs: [peg, RECEIVER],
+    invitationMethod: 'makeInvitationToTransfer',
+    invitationArgs: [peg, RECEIVER],
     offer,
     meta: { date: Date.now(), origin: '*pegasus transfer script*', },
     wallet,

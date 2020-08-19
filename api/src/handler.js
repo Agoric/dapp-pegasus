@@ -2,7 +2,7 @@
 import harden from '@agoric/harden';
 import { E } from '@agoric/eventual-send';
 
-export default harden(({ publicAPI, http }, _inviteMaker) => {
+export default harden(({ publicAPI, http }, _invitationMaker) => {
   let notifier;
 
   // Here's how you could implement a notification-based

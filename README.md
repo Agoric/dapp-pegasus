@@ -18,7 +18,7 @@ Pegasus currently uses the packet data JSON format of the Interchain Standard fu
 
 **CAVEAT: Please note that the Pegasus Dapp UI has not yet been created (we were missing some crucial wallet features at the time of the hackathon).**
 
-Instead, we will use "agoric deploy scripts" to expose issuers to the Agoric wallet, create pegs, and request Zoe invites to transfer assets over them.
+Instead, we will use "agoric deploy scripts" to expose issuers to the Agoric wallet, create pegs, and request Zoe invitations to transfer assets over them.
 
 ## Number of Wallets
 

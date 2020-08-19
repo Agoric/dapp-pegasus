@@ -50,14 +50,7 @@
  */
 
 /**
- * @typedef {Object} TransferResult
- * @property {boolean} success True if the transfer was successful
- * @property {any} [error] The description of the error
- * @property {Payment} [refund] The refund if the transfer is known to have failed
- */
-
-/**
- * @typedef {(payment: PaymentP, depositAddress: DepositAddress) => Promise<TransferResult>} Sender
+ * @typedef {(zcfSeat: ZCFSeat, depositAddress: DepositAddress) => Promise<void>} Sender
  * Successive transfers are not guaranteed to be processed in the order in which they were sent.
  * @typedef {(packet: FungibleTransferPacket) => Promise<unknown>} Receiver
  * @typedef {Object} Courier

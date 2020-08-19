@@ -120,12 +120,12 @@ async function testRemotePeg(t) {
 
   const allegedName = await E(pegP).getAllegedName();
   t.equals(allegedName, 'Gaia', 'alleged peg name is equal');
-  const transferInvite = await E(pegasus).makeInviteToTransfer(
+  const transferInvitation = await E(pegasus).makeInvitationToTransfer(
     pegP,
     'markaccount',
   );
   const { outcome, payout } = await E(zoe).offer(
-    transferInvite,
+    transferInvitation,
     harden({
       give: { Transfer: localAtomsAmount },
     }),

@@ -80,7 +80,7 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
 
   // Now that we've done all the admin work, let's share this
   // instanceHandle by adding it to the registry. Any users of our
-  // contract will use this instanceHandle to get invites to the
+  // contract will use this instanceHandle to get invitations to the
   // contract in order to make an offer.
   const INSTANCE_REG_KEY = await E(registry).register(`${CONTRACT_NAME}`, instanceHandle);
   await E(scratch).set('pegasus', INSTANCE_REG_KEY);

@@ -10,9 +10,9 @@ const makeZoeHelpers = zcf => {
    * @returns {Promise<OfferResultRecord>}
    */
   const makeEmptyOfferWithResult = async () => {
-    const invite = zcf.makeInvitation(_ => undefined, 'empty offer');
+    const invitation = zcf.makeInvitation(_ => undefined, 'empty offer');
     const zoe = zcf.getZoeService();
-    return E(zoe).offer(invite);
+    return E(zoe).offer(invitation);
   };
 
   /**
