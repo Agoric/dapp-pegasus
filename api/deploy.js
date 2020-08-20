@@ -5,6 +5,8 @@ import fs from 'fs';
 import installationConstants from '../ui.old/public/conf/installationConstants.js';
 import { E } from '@agoric/eventual-send';
 
+import '@agoric/zoe/exported';
+
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js
 // script ends, connections to any of its objects are severed.
@@ -39,7 +41,7 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
     spawner,
 
     // *** ON-CHAIN REFERENCES ***
-    zoe, 
+    zoe: untypedZoe,
 
     board,
     ibcport: untypedPorts,
@@ -47,6 +49,9 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
 
   /** @type {import('@agoric/swingset-vat/src/vats/network').Port[]} */
   const ibcport = untypedPorts;
+
+  /** @type {ZoeService} */
+  const zoe = untypedZoe;
 
   // To get the backend of our dapp up and running, first we need to
   // grab the installationHandle that our contract deploy script put
@@ -58,27 +63,27 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
   const pegasusContractInstallationHandle = await E(board).getValue(INSTALLATION_BOARD_ID);
   
   const {
-    instanceRecord: { publicAPI, handle: instanceHandle },
+    instance,
   } = await E(zoe)
-    .makeInstance(pegasusContractInstallationHandle, {}, { board });
+    .startInstance(pegasusContractInstallationHandle, {}, { board });
   console.log('- SUCCESS! contract instance is running on Zoe');
 
-  // An instanceHandle is an opaque identifier like an installationHandle.
-  // instanceHandle identifies an instance of a running contract.
-  if (!instanceHandle) {
+  // An Instance is an opaque identifier like an installationHandle.
+  // Instance identifies an instance of a running contract.
+  if (!instance) {
     console.log('- FAILURE! contract instance NOT retrieved.');
     throw new Error('Unable to create contract instance');
   }
 
   // Now that we've done all the admin work, let's share this
-  // instanceHandle by adding it to the registry. Any users of our
-  // contract will use this instanceHandle to get invitations to the
+  // Instance by adding it to the registry. Any users of our
+  // contract will use this Instance to get invitations to the
   // contract in order to make an offer.
-  const INSTANCE_BOARD_ID = await E(board).getId(instanceHandle);
+  const INSTANCE_BOARD_ID = await E(board).getId(instance);
   await E(scratch).set('pegasus', INSTANCE_BOARD_ID);
 
   console.log(`-- Contract Name: ${CONTRACT_NAME}`);
-  console.log(`-- InstanceHandle Registry Key: ${INSTANCE_BOARD_ID}`);
+  console.log(`-- Instance Registry Key: ${INSTANCE_BOARD_ID}`);
   console.log(`-- Peg Registry Key`)
 
   // We want the Gaia connection to run persistently. (Scripts such as this
