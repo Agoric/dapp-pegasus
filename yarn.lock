@@ -174,7 +174,7 @@
   resolved "https://registry.yarnpkg.com/@agoric/install-ses/-/install-ses-0.2.0.tgz#fee49ca667a3dcebe29175b07218fcb9f458664c"
   integrity sha512-hl2vcpZG52XHNwoePou1v2x5Bt2NEHi3lRWLRr1/6Gvaf2LDiuPGp7kOS8haHdxsh6YknP+jrlXnj8qKGHypXg==
   dependencies:
-    ses "^0.8.0"
+    ses "^0.10.1"
 
 "@agoric/layer-cake@^0.0.1":
   version "0.0.1"
@@ -4467,15 +4467,6 @@ ses@^0.10.1:
   dependencies:
     "@agoric/babel-standalone" "^7.9.5"
     "@agoric/make-hardener" "^0.1.0"
-    "@agoric/transform-module" "^0.3.0"
-
-ses@^0.8.0:
-  version "0.8.0"
-  resolved "https://registry.yarnpkg.com/ses/-/ses-0.8.0.tgz#e13d87fcc10dc32a63054300bf5d51a43ef575fb"
-  integrity sha512-De6R7ok79m2CMNtsldZ3g8w3GvjBn3X3YN1r2ZT0z+xtXjkPKZqFGuoLeb7ys81SZbJYQWnrmDwLdxA7XU94xw==
-  dependencies:
-    "@agoric/babel-standalone" "^7.9.5"
-    "@agoric/make-hardener" "0.0.8"
     "@agoric/transform-module" "^0.3.0"
 
 set-blocking@^2.0.0, set-blocking@~2.0.0:

@@ -38,7 +38,7 @@ jobs:
       uses: actions/checkout@v2
       with:
         repository: Agoric/agoric-sdk
-        path: agoric-sdk
+        path: ~/agoric-sdk
         ref: ${{steps.get-branch.outputs.result}}
   
     - name: Use Node.js ${{ matrix.node-version }}
@@ -50,9 +50,9 @@ jobs:
       run: |
         yarn install
         yarn build
-        yarn link-cli ~/bin/agoric
-        echo "::add-path::/home/runner/bin"
-      working-directory: ./agoric-sdk
+        yarn link-cli $HOME/bin/agoric
+        echo "::add-path::$HOME/bin"
+      working-directory: ~/agoric-sdk
 
     - name: agoric install
       run: agoric install
