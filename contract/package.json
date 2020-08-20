@@ -4,14 +4,12 @@
   "private": true,
   "description": "Contract for the Network Pegging Agoric Dapp",
   "scripts": {
-    "build": "yarn build:types",
-    "build:types": "tsc -p jsconfig.json",
+    "build": "exit 0",
+    "lint:types": "tsc -p jsconfig.json",
     "test": "tape -r esm 'test/**/test-*.js' | tap-spec",
-    "lint": "eslint '**/*.{js,jsx}'",
-    "lint-fix": "eslint --fix '**/*.{js,jsx}'",
-    "lint-check": "eslint '**/*.{js,jsx}'",
-    "lint-fix-jessie": "eslint -c '.eslintrc-jessie.js' --fix '**/*.{js,jsx}'",
-    "lint-check-jessie": "eslint -c '.eslintrc-jessie.js' '**/*.{js,jsx}'"
+    "lint": "yarn lint:types && eslint '**/*.{js,jsx}'",
+    "lint-fix": "yarn lint --fix",
+    "lint-check": "yarn lint"
   },
   "devDependencies": {
     "eslint": "^6.1.0",
@@ -84,6 +82,7 @@
       "no-unused-expressions": "off",
       "no-loop-func": "off",
       "no-inner-declarations": "off",
+      "import/no-extraneous-dependencies": "off",
       "import/prefer-default-export": "off"
     }
   },

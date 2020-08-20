@@ -1,6 +1,4 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 import '@agoric/install-ses';
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { test } from 'tape-promise/tape';
 
 import { E } from '@agoric/eventual-send';
@@ -10,7 +8,6 @@ import {
   makeLoopbackProtocolHandler,
 } from '@agoric/swingset-vat/src/vats/network';
 
-// eslint-disable-next-line import/no-extraneous-dependencies
 import bundleSource from '@agoric/bundle-source';
 import { makeLocalAmountMath } from '@agoric/ertp';
 import { makeZoe } from '@agoric/zoe';

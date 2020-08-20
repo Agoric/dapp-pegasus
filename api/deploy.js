@@ -2,8 +2,8 @@
 // Agoric Dapp api deployment script
 
 import fs from 'fs';
-import installationConstants from '../ui.old/public/conf/installationConstants.js';
 import { E } from '@agoric/eventual-send';
+import installationConstants from '../ui.old/public/conf/installationConstants';
 
 import '@agoric/zoe/exported';
 
@@ -22,20 +22,21 @@ import '@agoric/zoe/exported';
  * available from REPL home
  * @param {DeployPowers} powers
  */
-export default async function deployApi(homePromise, { bundleSource, pathResolve }) {
-
+export default async function deployApi(
+  homePromise,
+  { bundleSource, pathResolve },
+) {
   // Let's wait for the promise to resolve.
   const home = await homePromise;
 
   // Unpack the references.
-  const { 
-
+  const {
     // *** LOCAL REFERENCES ***
 
     // Scratch is a map only on this machine, and can be used for
     // communication in objects between processes/scripts on this
     // machine.
-    uploads: scratch,  
+    uploads: scratch,
 
     // The spawner persistently runs scripts within ag-solo, off-chain.
     spawner,
@@ -56,16 +57,16 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
   // To get the backend of our dapp up and running, first we need to
   // grab the installationHandle that our contract deploy script put
   // in the public registry.
-  const { 
+  const { INSTALLATION_BOARD_ID, CONTRACT_NAME } = installationConstants;
+  const pegasusContractInstallationHandle = await E(board).getValue(
     INSTALLATION_BOARD_ID,
-    CONTRACT_NAME,
-  } = installationConstants;
-  const pegasusContractInstallationHandle = await E(board).getValue(INSTALLATION_BOARD_ID);
-  
-  const {
-    instance,
-  } = await E(zoe)
-    .startInstance(pegasusContractInstallationHandle, {}, { board });
+  );
+
+  const { instance } = await E(zoe).startInstance(
+    pegasusContractInstallationHandle,
+    {},
+    { board },
+  );
   console.log('- SUCCESS! contract instance is running on Zoe');
 
   // An Instance is an opaque identifier like an installationHandle.
@@ -84,7 +85,7 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
 
   console.log(`-- Contract Name: ${CONTRACT_NAME}`);
   console.log(`-- Instance Registry Key: ${INSTANCE_BOARD_ID}`);
-  console.log(`-- Peg Registry Key`)
+  console.log(`-- Peg Registry Key`);
 
   // We want the Gaia connection to run persistently. (Scripts such as this
   // deploy.js script are ephemeral and all connections to objects
@@ -94,7 +95,7 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
 
   // Bundle up the handler code
   const bundle = await bundleSource(pathResolve('./src/gaiaTransfer.js'));
-  
+
   // Install it on the spawner
   const gaiaInstall = E(spawner).install(bundle);
 

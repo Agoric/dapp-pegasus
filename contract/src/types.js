@@ -52,7 +52,7 @@
 /**
  * @typedef {(zcfSeat: ZCFSeat, depositAddress: DepositAddress) => Promise<void>} Sender
  * Successive transfers are not guaranteed to be processed in the order in which they were sent.
- * @typedef {(packet: FungibleTransferPacket) => Promise<unknown>} Receiver
+ * @typedef {(packet: FungibleTransferPacket) => Promise<void>} Receiver
  * @typedef {Object} Courier
  * @property {Sender} send
  * @property {Receiver} receive

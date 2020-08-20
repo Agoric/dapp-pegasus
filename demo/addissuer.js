@@ -5,8 +5,8 @@
 // Until that time, this allows contract developers to add their
 // issuer and purse to an individual wallet.
 
-import dappConstants from '../ui.old/public/conf/defaults';
 import { E } from '@agoric/eventual-send';
+import dappConstants from '../ui.old/public/conf/defaults';
 
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js

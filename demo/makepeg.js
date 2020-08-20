@@ -5,8 +5,8 @@
 // Until that time, this allows contract developers to add their
 // issuer and purse to an individual wallet.
 
-import dappConstants from '../ui.old/public/conf/defaults';
 import { E } from '@agoric/eventual-send';
+import dappConstants from '../ui.old/public/conf/defaults';
 
 import '@agoric/zoe/exported';
 import '@agoric/swingset-vat/src/vats/network/types';
@@ -16,35 +16,23 @@ import '@agoric/swingset-vat/src/vats/network/types';
 // script ends, connections to any of its objects are severed.
 
 // The contract's board id for the assurance issuer.
-const {
-  INSTANCE_BOARD_ID,
-  GAIA_IBC_ADDRESS,
-} = dappConstants;
-
-/**
- * @typedef {Object} DeployPowers The special powers that `agoric deploy` gives us
- * @property {(path: string) => { moduleFormat: string, source: string }} bundleSource
- * @property {(path: string) => string} pathResolve
- */
+const { INSTANCE_BOARD_ID, GAIA_IBC_ADDRESS } = dappConstants;
 
 /**
  * @param {any} homePromise A promise for the references
  * available from REPL home
- * @param {DeployPowers} powers
  */
-export default async function deployWallet(homePromise, { bundleSource, pathResolve }) {
-
+export default async function deployWallet(homePromise) {
   // Let's wait for the promise to resolve.
   const home = await homePromise;
 
   // Unpack the home references.
-  const { 
-
+  const {
     // *** LOCAL REFERENCES ***
 
     // This wallet only exists on this machine, and only you have
     // access to it. The wallet stores purses and handles transactions.
-    wallet, 
+    wallet,
 
     // *** ON-CHAIN REFERENCES ***
 
@@ -76,7 +64,6 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
   const localBrand = await E(peg).getLocalBrand();
   const localIssuer = await E(pegasus).getLocalIssuer(localBrand);
 
-
   console.log('Waiting for Pegasus Dapp Approval in your wallet...');
   const DAPP_ORIGIN = 'https://peg-as.us';
   await E(wallet).waitForDappApproval('Pegasus', DAPP_ORIGIN);
@@ -84,8 +71,7 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
   console.log('Continuing...');
   await E(wallet).suggestInstance('Pegasus', INSTANCE_BOARD_ID, DAPP_ORIGIN);
 
-  const ATOM_ISSUER = 'My ATOM';
-  const SHADOW_PURSE = `Alice's Atoms`;
+  const ATOM_ISSUER = await E(peg).getAllegedName();
 
   // Associate the issuer with a petname.
   const ISSUER_BOARD_ID = await E(board).getId(localIssuer);
