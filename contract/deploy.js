@@ -37,11 +37,11 @@ export default async function deployContract(
     // everyone has access to the same Zoe.
     zoe,
 
-    // The registry also lives on-chain, and is used to make private
+    // The board also lives on-chain, and is used to make private
     // objects public to everyone else on-chain. These objects get
     // assigned a unique string key. Given the key, other people can
     // access the object through the registry.
-    registry,
+    board,
   } = home;
 
   // First, we must bundle up our contract code (./src/contract.js)
@@ -63,25 +63,22 @@ export default async function deployContract(
   // we register our installationHandle, and the registry will add a
   // suffix creating a guaranteed unique name.
   const CONTRACT_NAME = 'pegasus';
-  const INSTALLATION_REG_KEY = await E(registry).register(
-    `${CONTRACT_NAME}installation`,
-    installationHandle,
-  );
+  const INSTALLATION_BOARD_ID = await E(board).getId(installationHandle);
   console.log('- SUCCESS! contract code installed on Zoe');
   console.log(`-- Contract Name: ${CONTRACT_NAME}`);
-  console.log(`-- InstallationHandle Register Key: ${INSTALLATION_REG_KEY}`);
+  console.log(`-- InstallationHandle Register Key: ${INSTALLATION_BOARD_ID}`);
 
   // Save the constants somewhere where the UI and api can find it.
   const dappConstants = {
     CONTRACT_NAME,
-    INSTALLATION_REG_KEY,
+    INSTALLATION_BOARD_ID,
   };
   const defaultsFile = pathResolve(
     `../ui.old/public/conf/installationConstants.js`,
   );
   console.log('writing', defaultsFile);
   const defaultsContents = `\
-// GENERATED FROM ${pathResolve('./deploy.js')}
+// GENERATED FROM ${__filename}
 export default ${JSON.stringify(dappConstants, undefined, 2)};
 `;
   await fs.promises.writeFile(defaultsFile, defaultsContents);

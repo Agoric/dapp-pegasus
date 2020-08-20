@@ -6,7 +6,7 @@
   "scripts": {
     "build": "yarn build:types",
     "build:types": "tsc -p jsconfig.json",
-    "test": "tape -r esm 'test/**/*.js' | tap-spec",
+    "test": "tape -r esm 'test/**/test-*.js' | tap-spec",
     "lint": "eslint '**/*.{js,jsx}'",
     "lint-fix": "eslint --fix '**/*.{js,jsx}'",
     "lint-check": "eslint '**/*.{js,jsx}'",
@@ -38,7 +38,7 @@
     "@agoric/zoe": "^0.7.0",
     "esm": "^3.2.5",
     "prettier": "^2.0.2",
-    "ses": "^0.9.1"
+    "ses": "^0.10.1"
   },
   "keywords": [],
   "repository": {

@@ -12,8 +12,10 @@ import {
 
 // eslint-disable-next-line import/no-extraneous-dependencies
 import bundleSource from '@agoric/bundle-source';
-
+import { makeLocalAmountMath } from '@agoric/ertp';
 import { makeZoe } from '@agoric/zoe';
+
+import fakeVatAdmin from './fakeVatAdmin';
 
 const contractPath = `${__dirname}/../src/pegasus`;
 
@@ -34,15 +36,17 @@ async function testRemotePeg(t) {
     },
   });
 
-  const zoe = makeZoe();
+  const zoe = makeZoe(fakeVatAdmin);
 
   // Pack the contract.
   const contractBundle = await bundleSource(contractPath);
   const installationHandle = await E(zoe).install(contractBundle);
 
-  const {
-    instanceRecord: { publicAPI },
-  } = await E(zoe).makeInstance(installationHandle, {}, { board });
+  const { publicFacet: publicAPI } = await E(zoe).startInstance(
+    installationHandle,
+    {},
+    { board },
+  );
 
   /**
    * @type {import('../src/pegasus').Pegasus}
@@ -110,13 +114,11 @@ async function testRemotePeg(t) {
   const localAtomsAmount = await E(localPurseP).getCurrentAmount();
   t.deepEquals(
     localAtomsAmount,
-    { brand: localBrand, extent: 100 },
+    { brand: localBrand, value: 100 },
     'we received the shadow atoms',
   );
 
-  // FIXME: This should be able to be a promise for payment, but Zoe balks:
-  // [TypeError: deposit does not accept promises as first argument. Instead of passing the promise (deposit(paymentPromise)), consider unwrapping the promise first: paymentPromise.then(actualPayment => deposit(actualPayment))]
-  const localAtomsP = await E(localPurseP).withdraw(localAtomsAmount);
+  const localAtoms = await E(localPurseP).withdraw(localAtomsAmount);
 
   const allegedName = await E(pegP).getAllegedName();
   t.equals(allegedName, 'Gaia', 'alleged peg name is equal');
@@ -124,23 +126,25 @@ async function testRemotePeg(t) {
     pegP,
     'markaccount',
   );
-  const { outcome, payout } = await E(zoe).offer(
+  const seat = await E(zoe).offer(
     transferInvitation,
     harden({
       give: { Transfer: localAtomsAmount },
     }),
-    harden({ Transfer: localAtomsP }),
+    harden({ Transfer: localAtoms }),
   );
+  const outcome = await seat.getOfferResult();
   t.equals(await outcome, undefined, 'transfer is successful');
 
-  const paymentPs = await payout;
+  const paymentPs = await seat.getPayouts();
   const refundAmount = await E(localIssuer).getAmountOf(paymentPs.Transfer);
-  const isEmptyRefund = await E(E(localIssuer).getAmountMath()).isEmpty(
+
+  const isEmptyRefund = await E(makeLocalAmountMath(localIssuer)).isEmpty(
     refundAmount,
   );
   t.assert(isEmptyRefund, 'no refund from success');
 
-  const stillIsLive = await E(localIssuer).isLive(localAtomsP);
+  const stillIsLive = await E(localIssuer).isLive(localAtoms);
   t.assert(!stillIsLive, 'payment is consumed');
 }
 

@@ -173,7 +173,10 @@ const makeCourier = ({
     // The payment is already escrowed, and proposed to retain, so try sending.
     return sendTransferPacket(connection, packet).then(
       _ => zcfSeat.exit(),
-      reason => zcfSeat.kickOut(reason),
+      reason => {
+        zcfSeat.kickOut(reason);
+        throw reason;
+      },
     );
   };
 
@@ -186,16 +189,21 @@ const makeCourier = ({
 
     const { userSeat, zcfSeat } = zcf.makeEmptySeatKit();
 
-    // Optimistically send the payout promise to the deposit facet.
-    E(depositFacet).receive(E(userSeat).getPayout('Transfer'));
-
     // Redeem the backing payment.
     try {
       redeem(zcfSeat, { Transfer: localAmount });
       zcfSeat.exit();
     } catch (e) {
       zcfSeat.kickOut(e);
+      throw e;
     }
+
+    const payout = await E(userSeat).getPayout('Transfer');
+
+    // Send the payout promise to the deposit facet.
+    E(depositFacet)
+      .receive(payout)
+      .catch(_ => {});
   };
 
   return { send, receive };
@@ -325,7 +333,7 @@ const makePegasus = (zcf, board) => {
      * @param {string} allegedName
      * @param {Connection|PromiseLike<Connection>} connectionP The network connection (IBC channel) to communicate over
      * @param {Denom} remoteDenom Remote denomination
-     * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged extents
+     * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged values
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
      * @returns {Promise<Peg>}
      */
@@ -369,7 +377,7 @@ const makePegasus = (zcf, board) => {
 
       // Create the issuer for the local erights corresponding to the remote values.
       const localKeyword = createLocalIssuerKeyword();
-      const zcfMint = zcf.makeZCFMint(localKeyword, amountMathKind);
+      const zcfMint = await zcf.makeZCFMint(localKeyword, amountMathKind);
       const { brand: localBrand } = zcfMint.getIssuerRecord();
 
       // Describe how to retain/redeem pegged shadow erights.
@@ -548,9 +556,9 @@ const makePegasus = (zcf, board) => {
  */
 
 /**
- * @param {ContractFacet} zcf
+ * @type {ContractStartFn}
  */
-const makeContract = zcf => {
+const start = zcf => {
   const { board } = zcf.getTerms();
 
   return {
@@ -559,6 +567,6 @@ const makeContract = zcf => {
 };
 
 harden(makeDenomUri);
-harden(makeContract);
+harden(start);
 harden(makePegasus);
-export { makeContract, makePegasus, makeDenomUri };
+export { start, makePegasus, makeDenomUri };

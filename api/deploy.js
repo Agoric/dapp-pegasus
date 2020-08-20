@@ -4,7 +4,6 @@
 import fs from 'fs';
 import installationConstants from '../ui.old/public/conf/installationConstants.js';
 import { E } from '@agoric/eventual-send';
-import harden from '@agoric/harden';
 
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js
@@ -31,10 +30,6 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
 
     // *** LOCAL REFERENCES ***
 
-    // This wallet only exists on this machine, and only you have
-    // access to it. The wallet stores purses and handles transactions.
-    wallet, 
-
     // Scratch is a map only on this machine, and can be used for
     // communication in objects between processes/scripts on this
     // machine.
@@ -46,9 +41,6 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
     // *** ON-CHAIN REFERENCES ***
     zoe, 
 
-    registry,
-
-    http,
     board,
     ibcport: untypedPorts,
   } = home;
@@ -60,10 +52,10 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
   // grab the installationHandle that our contract deploy script put
   // in the public registry.
   const { 
-    INSTALLATION_REG_KEY,
+    INSTALLATION_BOARD_ID,
     CONTRACT_NAME,
   } = installationConstants;
-  const pegasusContractInstallationHandle = await E(registry).get(INSTALLATION_REG_KEY);
+  const pegasusContractInstallationHandle = await E(board).getValue(INSTALLATION_BOARD_ID);
   
   const {
     instanceRecord: { publicAPI, handle: instanceHandle },
@@ -82,11 +74,11 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
   // instanceHandle by adding it to the registry. Any users of our
   // contract will use this instanceHandle to get invitations to the
   // contract in order to make an offer.
-  const INSTANCE_REG_KEY = await E(registry).register(`${CONTRACT_NAME}`, instanceHandle);
-  await E(scratch).set('pegasus', INSTANCE_REG_KEY);
+  const INSTANCE_BOARD_ID = await E(board).getId(instanceHandle);
+  await E(scratch).set('pegasus', INSTANCE_BOARD_ID);
 
   console.log(`-- Contract Name: ${CONTRACT_NAME}`);
-  console.log(`-- InstanceHandle Registry Key: ${INSTANCE_REG_KEY}`);
+  console.log(`-- InstanceHandle Registry Key: ${INSTANCE_BOARD_ID}`);
   console.log(`-- Peg Registry Key`)
 
   // We want the Gaia connection to run persistently. (Scripts such as this
@@ -107,7 +99,7 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
 
   // Re-save the constants somewhere where the UI and api can find it.
   const dappConstants = {
-    INSTANCE_REG_KEY,
+    INSTANCE_BOARD_ID,
     GAIA_IBC_ADDRESS,
     BRIDGE_URL: 'http://127.0.0.1:8000',
     API_URL: 'http://127.0.0.1:8000',
@@ -115,7 +107,7 @@ export default async function deployApi(homePromise, { bundleSource, pathResolve
   const defaultsFile = pathResolve(`../ui.old/public/conf/defaults.js`);
   console.log('writing', defaultsFile);
   const defaultsContents = `\
-// GENERATED FROM ${pathResolve('./deploy.js')}
+// GENERATED FROM ${__filename}
 export default ${JSON.stringify(dappConstants, undefined, 2)};
 `;
   await fs.promises.writeFile(defaultsFile, defaultsContents);
