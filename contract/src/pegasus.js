@@ -164,22 +164,26 @@ const makeCourier = ({
 
   /** @type {Sender} */
   const send = async (zcfSeat, depositAddress) => {
-    const amount = await zcfSeat.getAmountAllocated('Transfer', localBrand);
-    const packet = localAmountToPacket(amount, depositAddress);
+    const tryToSend = async () => {
+      const amount = zcfSeat.getAmountAllocated('Transfer', localBrand);
+      const packet = localAmountToPacket(amount, depositAddress);
 
-    // Retain the payment.  We must not proceed on failure.
-    retain(zcfSeat, { Transfer: amount });
+      // Retain the payment.  We must not proceed on failure.
+      retain(zcfSeat, { Transfer: amount });
 
-    // The payment is already escrowed, and proposed to retain, so try sending.
-    return sendTransferPacket(connection, packet).then(
-      _ => zcfSeat.exit(),
-      reason => {
-        // Return the payment to the seat, if possible.
-        redeem(zcfSeat, { Transfer: amount });
-        // Reflect the error back to the seat.
-        zcfSeat.kickOut(reason);
-      },
-    );
+      // The payment is already escrowed, and proposed to retain, so try sending.
+      return sendTransferPacket(connection, packet).then(
+        _ => zcfSeat.exit(),
+        reason => {
+          // Return the payment to the seat, if possible.
+          redeem(zcfSeat, { Transfer: amount });
+          throw reason;
+        },
+      );
+    };
+
+    // Reflect any error back to the seat.
+    return tryToSend().catch(reason => zcfSeat.kickOut(reason));
   };
 
   /** @type {Receiver} */
