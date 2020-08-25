@@ -174,8 +174,10 @@ const makeCourier = ({
     return sendTransferPacket(connection, packet).then(
       _ => zcfSeat.exit(),
       reason => {
+        // Return the payment to the seat, if possible.
+        redeem(zcfSeat, { Transfer: amount });
+        // Reflect the error back to the seat.
         zcfSeat.kickOut(reason);
-        throw reason;
       },
     );
   };
@@ -198,12 +200,19 @@ const makeCourier = ({
       throw e;
     }
 
+    // Once we've gotten to this point, their payment is committed and
+    // won't be refunded on a failed receive.
     const payout = await E(userSeat).getPayout('Transfer');
 
     // Send the payout promise to the deposit facet.
     E(depositFacet)
       .receive(payout)
       .catch(_ => {});
+
+    // We don't want to wait for the depositFacet to return, so that
+    // it can't hang up (i.e. DoS) an ordered channel, which relies on
+    // us returning promptly.
+    return undefined;
   };
 
   return { send, receive };
