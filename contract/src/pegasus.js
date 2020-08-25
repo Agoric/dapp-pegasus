@@ -24,7 +24,7 @@ const TRANSFER_PROPOSAL_SHAPE = {
 /**
  * Get the denomination combined with the network address.
  *
- * @param {Endpoint|PromiseLike<Endpoint>} endpointP network connection address
+ * @param {ERef<Endpoint>} endpointP network connection address
  * @param {Denom} denom denomination
  * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] the protocol to use
  * @returns {Promise<string>} denomination URI scoped to endpoint
@@ -74,7 +74,7 @@ function makeICS20Converter(localBrand, prefixedDenom) {
     // packet.amount is a string in JSON.
     const floatValue = Number(packet.amount);
 
-    // If we overflow, or don't have a number, throw an exception!
+    // If we overflow, or don't have a non-negative integer, throw an exception!
     const value = Nat(floatValue);
 
     return harden({
@@ -184,8 +184,8 @@ const makeCourier = ({
   const receive = async packet => {
     // Look up the deposit facet for this board address, if there is one.
     const depositAddress = packet.receiver;
-    const localAmount = packetToLocalAmount(packet);
     const depositFacet = await E(board).getValue(depositAddress);
+    const localAmount = packetToLocalAmount(packet);
 
     const { userSeat, zcfSeat } = zcf.makeEmptySeatKit();
 
@@ -223,7 +223,7 @@ const makePegasus = (zcf, board) => {
    * @typedef {Object} LocalDenomState
    * @property {Store<DenomUri, Courier>} denomUriToCourier
    * @property {Set<Peg>} pegs
-   * @property {number} lastNonce
+   * @property {number} lastDenomNonce
    */
 
   /**
@@ -248,6 +248,11 @@ const makePegasus = (zcf, board) => {
 
   /**
    * Create a fresh Peg associated with a descriptor.
+   *
+   * @typedef {Object} PegDescriptor
+   * @property {Brand} localBrand
+   * @property {DenomUri} denomUri
+   * @property {string} allegedName
    *
    * @param {Connection} c
    * @param {PegDescriptor} desc
@@ -295,7 +300,7 @@ const makePegasus = (zcf, board) => {
           connectionToLocalDenomState.init(c, {
             denomUriToCourier,
             pegs,
-            lastNonce: 0,
+            lastDenomNonce: 0,
           });
         },
         async onReceive(c, packetBytes) {
@@ -331,9 +336,11 @@ const makePegasus = (zcf, board) => {
      * Peg a remote asset over a network connection.
      *
      * @param {string} allegedName
-     * @param {Connection|PromiseLike<Connection>} connectionP The network connection (IBC channel) to communicate over
+     * @param {ERef<Connection>} connectionP The network connection (such as IBC
+     * channel) to communicate over
      * @param {Denom} remoteDenom Remote denomination
-     * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged values
+     * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of
+     * amount math for the pegged values
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
      * @returns {Promise<Peg>}
      */
@@ -403,8 +410,9 @@ const makePegasus = (zcf, board) => {
      * Peg a local asset over a network connection.
      *
      * @param {string} allegedName
-     * @param {Connection|PromiseLike<Connection>} connectionP The network connection (IBC channel) to communicate over
-     * @param {Issuer} localIssuer Local ERTP issuer whose assets should be pegged to c
+     * @param {ERef<Connection>} connectionP The network connection (such as IBC
+     * channel) to communicate over
+     * @param {Issuer} localIssuer Local ERTP issuer whose assets should be pegged to the connection
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak on the connection
      * @returns {Promise<Peg>}
      */
@@ -428,8 +436,8 @@ const makePegasus = (zcf, board) => {
 
       // We need the last nonce for our denom name.
       const localDenomState = connectionToLocalDenomState.get(c);
-      localDenomState.lastNonce += 1;
-      const denom = `pegasus${localDenomState.lastNonce}`;
+      localDenomState.lastDenomNonce += 1;
+      const denom = `pegasus${localDenomState.lastDenomNonce}`;
 
       // Find our data elements.
       const allegedLocalAddress = await E(c).getLocalAddress();

@@ -29,11 +29,6 @@
  * @property {() => string} getAllegedName get the debug name
  * @property {() => Brand} getLocalBrand get the brand associated with the peg
  * @property {() => DenomUri} getDenomUri get the denomination identifier
- *
- * @typedef {Object} PegDescriptor
- * @property {Brand} localBrand
- * @property {DenomUri} denomUri
- * @property {string} allegedName
  */
 
 /**
