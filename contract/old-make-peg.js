@@ -1,6 +1,5 @@
 /* eslint-disable */
 
-import harden from '@agoric/harden';
 import { makeNatDescOps } from '../../core/config/natDescOps';
 import { makeMint } from '../../core/mint';
 

@@ -2,7 +2,6 @@ import '@agoric/install-ses';
 import { test } from 'tape-promise/tape';
 
 import { E } from '@agoric/eventual-send';
-import harden from '@agoric/harden';
 import {
   makeNetworkProtocol,
   makeLoopbackProtocolHandler,
