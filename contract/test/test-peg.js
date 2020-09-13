@@ -90,7 +90,7 @@ async function testRemotePeg(t) {
   const localIssuer = await E(pegasus).getLocalIssuer(localBrand);
 
   const localPurseP = E(localIssuer).makeEmptyPurse();
-  localDepositFacet = await E(localPurseP).makeDepositFacet();
+  localDepositFacet = await E(localPurseP).getDepositFacet();
 
   // Get some local Atoms.
   const sendPacket = {

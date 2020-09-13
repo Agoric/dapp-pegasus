@@ -183,7 +183,9 @@ const makeCourier = ({
     };
 
     // Reflect any error back to the seat.
-    return tryToSend().catch(reason => zcfSeat.kickOut(reason));
+    return tryToSend().catch(reason => {
+      zcfSeat.kickOut(reason);
+    });
   };
 
   /** @type {Receiver} */
@@ -425,8 +427,10 @@ const makePegasus = (zcf, board) => {
      * @param {string} allegedName
      * @param {ERef<Connection>} connectionP The network connection (such as IBC
      * channel) to communicate over
-     * @param {Issuer} localIssuer Local ERTP issuer whose assets should be pegged to the connection
-     * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak on the connection
+     * @param {Issuer} localIssuer Local ERTP issuer whose assets should be
+     * pegged to the connection
+     * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak
+     * on the connection
      * @returns {Promise<Peg>}
      */
     async pegLocal(
@@ -562,12 +566,12 @@ const makePegasus = (zcf, board) => {
        * Attempt the transfer, returning a refund if failed.
        * @type {OfferHandler}
        */
-      const offerHandler = zcfSeat => send(zcfSeat, depositAddress);
+      const offerHandler = zcfSeat => {
+        assertProposalShape(zcfSeat, TRANSFER_PROPOSAL_SHAPE);
+        send(zcfSeat, depositAddress);
+      };
 
-      return zcf.makeInvitation(
-        assertProposalShape(offerHandler, TRANSFER_PROPOSAL_SHAPE),
-        'pegasus transfer',
-      );
+      return zcf.makeInvitation(offerHandler, 'pegasus transfer');
     },
   });
 };
