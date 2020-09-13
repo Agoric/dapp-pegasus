@@ -5,16 +5,16 @@
 // Until that time, this allows contract developers to add their
 // issuer and purse to an individual wallet.
 
-import dappConstants from '../ui.old/public/conf/defaults';
 import { E } from '@agoric/eventual-send';
+import dappConstants from '../ui.old/public/conf/defaults';
 
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js
 // script ends, connections to any of its objects are severed.
 
-// The contract's registry key for the assurance issuer.
+// The contract's board ID for the assurance issuer.
 const {
-  INSTANCE_REG_KEY,
+  INSTANCE_BOARD_ID,
 } = dappConstants;
 
 /**
@@ -44,19 +44,15 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
 
     // *** ON-CHAIN REFERENCES ***
 
-    // The registry lives on-chain, and is used to make private
-    // objects public to everyone else on-chain. These objects get
-    // assigned a unique string key. Given the key, other people can
-    // access the object through the registry.
-    registry,
+    board,
 
     uploads: scratch,
 
     zoe,
   } = home;
 
-  const instanceHandle = await E(registry).get(INSTANCE_REG_KEY);
-  const { publicAPI } = await E(zoe).getInstanceRecord(instanceHandle);
+  const instance = await E(board).getValue(INSTANCE_BOARD_ID);
+  const publicAPI = await E(zoe).getPublicFacet(instance);
 
   /**
    * @type {import('../contract/src/pegasus').Pegasus}
@@ -66,9 +62,9 @@ export default async function deployWallet(homePromise, { bundleSource, pathReso
   const notifier = await E(pegasus).getNotifier();
   const { value } = await E(notifier).getUpdateSince();
 
-  // FIXME: Don't just select the first peg.
+  // FIXME: Don't just select the last peg.
   /** @type {import('../contract/src/pegasus').Peg} */
-  const peg = value[0];
+  const peg = value[value.length - 1];
 
   const localBrand = await E(peg).getLocalBrand();
   const localIssuer = await E(pegasus).getLocalIssuer(localBrand);

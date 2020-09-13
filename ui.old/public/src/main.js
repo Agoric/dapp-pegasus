@@ -110,7 +110,7 @@ export default async function main() {
           //   E(target)[hookMethod](...hookArgs)
           hooks: {
             publicAPI: {
-              getInvite: ['makeInvite'], // E(publicAPI).makeInvite()
+              getInvitation: ['makeInvitation'], // E(publicAPI).makeInvitation()
             },
           },
       

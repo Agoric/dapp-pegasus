@@ -7,7 +7,7 @@
 
 import dappConstants from '../ui.old/public/conf/defaults';
 import { E } from '@agoric/eventual-send';
-import { assert, details, q } from '@agoric/assert';
+import { assert, details } from '@agoric/assert';
 
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js
@@ -15,7 +15,7 @@ import { assert, details, q } from '@agoric/assert';
 
 // The contract's registry key for the assurance issuer.
 const {
-  INSTANCE_REG_KEY,
+  INSTANCE_BOARD_ID,
 } = dappConstants;
 
 /**
@@ -33,78 +33,79 @@ export default async function deployTransfer(homePromise, { bundleSource, pathRe
 
   // Let's wait for the promise to resolve.
   const home = await homePromise;
-
+  
   // Unpack the home references.
   const { 
-
+    
     // *** LOCAL REFERENCES ***
-
+    
     // This wallet only exists on this machine, and only you have
     // access to it. The wallet stores purses and handles transactions.
     wallet, 
-
+    
     spawner,
-
+    
     // *** ON-CHAIN REFERENCES ***
-
-    // The registry lives on-chain, and is used to make private
-    // objects public to everyone else on-chain. These objects get
-    // assigned a unique string key. Given the key, other people can
-    // access the object through the registry.
-    registry,
-
+    
+    board,
+    
     zoe,
   } = home;
-
-  const instanceHandle = await E(registry).get(INSTANCE_REG_KEY);
-  const { publicAPI } = await E(zoe).getInstanceRecord(instanceHandle);
-
+  
+  const instance = await E(board).getValue(INSTANCE_BOARD_ID);
+  
   /**
    * @type {import('../contract/src/pegasus').Pegasus}
    */
-  const pegasus = publicAPI;
-
+  const pegasus = await E(zoe).getPublicFacet(instance);
+  
   const notifier = await E(pegasus).getNotifier();
   const { value } = await E(notifier).getUpdateSince();
-
-  // FIXME: Don't just select the first peg.
-  /** @type {import('../contract/src/pegasus').Peg} */
-  const peg = value[0];
-
-  const extent = JSON.parse(process.env.EXTENT || '0')
-  const pursePetname = process.env.PURSE || "Bob's Atoms";
-  const RECEIVER = process.env.RECEIVER
-
-  assert(RECEIVER, details`$RECEIVER must be set`);
-
-  // Obtain the correct transfer parameters.
-  // Bundle up the hooks code
-  const bundle = await bundleSource(pathResolve('./src/transferOffer.js'));
   
-  // Install it on the spawner
-  const transferInstall = E(spawner).install(bundle);
+  // FIXME: Don't just select the last peg.
+  /** @type {import('../contract/src/pegasus').Peg} */
+  const peg = value[value.length - 1];
+  
+  const extent = JSON.parse(process.env.VALUE || '0')
+  let pursePetname = process.env.PURSE || "Bob's Atoms";
+  try {
+    pursePetname = JSON.parse(pursePetname);
+  } catch (e) {
+    // nothing
+  }
+  const RECEIVER = process.env.RECEIVER
+  
+  assert(RECEIVER, details`$RECEIVER must be set`);
+  
+  const invitation = await E(pegasus).makeInvitationToTransfer(peg, RECEIVER);
+  const invitationAmount = await E(E(zoe).getInvitationIssuer()).getAmountOf(invitation);
+  const {
+    value: [{ handle: invitationHandle }],
+  } = invitationAmount;
+
+  const installation = await E(zoe).getInstallation(invitation);
+  const INSTALLATION_BOARD_ID = await E(board).getId(installation);
+  const INVITE_BOARD_ID = await E(board).getId(invitationHandle);
+
+  await E(wallet).addPayment(invitation);
 
   // Spawn the offer in the solo.
   const offer = {
     id: Date.now(),
-    instanceRegKey: INSTANCE_REG_KEY,
+    invitationHandleBoardId: INVITE_BOARD_ID,
+    instanceHandleBoardId: INSTANCE_BOARD_ID,
+    installationHandleBoardId: INSTALLATION_BOARD_ID,
     proposalTemplate: {
       give: {
         Transfer: {
           pursePetname,
-          extent,
+          value: extent,
         },
       },
     },
   };
 
-  await E(transferInstall).spawn({
-    inviteMethod: 'makeInviteToTransfer',
-    inviteArgs: [peg, RECEIVER],
-    offer,
-    meta: { date: Date.now(), origin: '*pegasus transfer script*', },
-    wallet,
-  });
+  await E(wallet).addOffer(offer, { date: Date.now(), origin: 'https://peg-as.us', });
 
   // We are done!
   console.log('Proposed transfer; check your wallet!');

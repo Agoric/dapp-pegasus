@@ -18,7 +18,7 @@ Pegasus currently uses the packet data JSON format of the Interchain Standard fu
 
 **CAVEAT: Please note that the Pegasus Dapp UI has not yet been created (we were missing some crucial wallet features at the time of the hackathon).**
 
-Instead, we will use "agoric deploy scripts" to expose issuers to the Agoric wallet, create pegs, and request Zoe invites to transfer assets over them.
+Instead, we will use "agoric deploy scripts" to expose issuers to the Agoric wallet, create pegs, and request Zoe invitations to transfer assets over them.
 
 ## Number of Wallets
 
@@ -80,7 +80,7 @@ Remember to navigate to Alice's Wallet in order to confirm the order with Zoe.
 
 ### Configure the Shell for Bob's Wallet
 
-For single-user mode, continue using the same wallet, but first clear the `$BOB` shell variable:
+For single-user mode, continue using the same wallet, but first clear the `$BOB_HOSTPORT` shell variable:
 
 ```sh
 # Reset Bob's wallet address to the default (Alice's wallet).
@@ -97,7 +97,7 @@ Now teach Bob's wallet about the pegged Atoms:
 
 ```sh
 # Register petnames for the Atom issuer in Bob's wallet:
-agoric deploy $BOB_HOSTPORT demo/deploy.js
+agoric deploy $BOB_HOSTPORT demo/addissuer.js
 ```
 
 Note in the wallet that an Atom purse has been added as `Bob's Atoms`.
@@ -112,7 +112,7 @@ Next, construct a Pegasus transfer to move 20 of the Atoms back to Bob's Gaia ac
 
 ```sh
 # Construct an offer to transfer back to Gaia in the REPL:
-EXTENT=20 RECEIVER="<Bob's Gaia Address>" agoric deploy $BOB_HOSTPORT demo/transfer.js
+VALUE=20 RECEIVER="<Bob's Gaia Address>" agoric deploy $BOB_HOSTPORT demo/transfer.js
 ```
 
 Accept the offer in Bob's wallet.  The 20 atoms are deducted from Bob's Atom purse.

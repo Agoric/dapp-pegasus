@@ -1,8 +1,7 @@
 // @ts-check
-import harden from '@agoric/harden';
 import { E } from '@agoric/eventual-send';
 
-export default harden(({ publicAPI, http }, _inviteMaker) => {
+export default harden(({ publicAPI, http }, _invitationMaker) => {
   let notifier;
 
   // Here's how you could implement a notification-based
@@ -10,14 +9,15 @@ export default harden(({ publicAPI, http }, _inviteMaker) => {
   const subChannelHandles = new Set();
 
   const sendToSubscribers = obj => {
-    E(http).send(obj, [...subChannelHandles.keys()])
+    E(http)
+      .send(obj, [...subChannelHandles.keys()])
       .catch(e => console.error('cannot send', e));
   };
 
   const fail = e => {
     const obj = {
       type: 'encouragement/encouragedError',
-      data: (e && e.message) || e
+      data: (e && e.message) || e,
     };
     sendToSubscribers(obj);
   };
@@ -56,11 +56,10 @@ export default harden(({ publicAPI, http }, _inviteMaker) => {
           subChannelHandles.delete(channelHandle);
         },
 
-        async onMessage(obj, { channelHandle }) {
+        async onMessage(obj, { _channelHandle }) {
           // These are messages we receive from either POST or WebSocket.
           switch (obj.type) {
             case 'encouragement/getEncouragement': {
-
               return harden({
                 type: 'encouragement/getEncouragementResponse',
                 instanceRegKey: undefined,
@@ -69,7 +68,6 @@ export default harden(({ publicAPI, http }, _inviteMaker) => {
             }
 
             case 'encouragement/subscribeNotifications': {
-
               return harden({
                 type: 'encouragement/subscribeNotificationsResponse',
                 data: true,

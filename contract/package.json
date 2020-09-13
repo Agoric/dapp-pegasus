@@ -4,13 +4,12 @@
   "private": true,
   "description": "Contract for the Network Pegging Agoric Dapp",
   "scripts": {
-    "build": "rm -f src/*.d.ts && tsc -p jsconfig.json",
-    "test": "tape -r esm 'test/**/*.js' | tap-spec",
-    "lint": "eslint '**/*.{js,jsx}'",
-    "lint-fix": "eslint --fix '**/*.{js,jsx}'",
-    "lint-check": "eslint '**/*.{js,jsx}'",
-    "lint-fix-jessie": "eslint -c '.eslintrc-jessie.js' --fix '**/*.{js,jsx}'",
-    "lint-check-jessie": "eslint -c '.eslintrc-jessie.js' '**/*.{js,jsx}'"
+    "build": "exit 0",
+    "lint:types": "tsc -p jsconfig.json",
+    "test": "tape -r esm 'test/**/test-*.js' | tap-spec",
+    "lint": "yarn lint:types && eslint '**/*.{js,jsx}'",
+    "lint-fix": "yarn lint --fix",
+    "lint-check": "yarn lint"
   },
   "devDependencies": {
     "eslint": "^6.1.0",
@@ -25,19 +24,18 @@
     "tape-promise": "^4.0.0"
   },
   "dependencies": {
-    "@agoric/assert": "^0.0.2",
-    "@agoric/ertp": "^0.5.2",
-    "@agoric/eventual-send": "^0.5.0",
-    "@agoric/harden": "0.0.4",
+    "@agoric/assert": "*",
+    "@agoric/ertp": "*",
+    "@agoric/eventual-send": "*",
     "@agoric/nat": "^2.0.1",
-    "@agoric/notifier": "^0.1.3",
-    "@agoric/store": "^0.0.2",
-    "@agoric/swingset-vat": "^0.6.0",
-    "@agoric/weak-store": "^0.0.8",
-    "@agoric/zoe": "^0.3.0",
+    "@agoric/notifier": "*",
+    "@agoric/store": "*",
+    "@agoric/swingset-vat": "*",
+    "@agoric/weak-store": "*",
+    "@agoric/zoe": "*",
     "esm": "^3.2.5",
     "prettier": "^2.0.2",
-    "ses": "^0.9.1"
+    "ses": "^0.10.1"
   },
   "keywords": [],
   "repository": {
@@ -83,6 +81,7 @@
       "no-unused-expressions": "off",
       "no-loop-func": "off",
       "no-inner-declarations": "off",
+      "import/no-extraneous-dependencies": "off",
       "import/prefer-default-export": "off"
     }
   },

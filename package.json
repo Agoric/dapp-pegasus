@@ -32,8 +32,45 @@
   },
   "dependencies": {
     "@agoric/babel-parser": "^7.6.4",
-    "agoric": "^0.4.0",
+    "agoric": "*",
     "babel-eslint": ">=11.0.0-beta.2",
     "eslint-plugin-eslint-comments": "^3.1.2"
+  },
+  "eslintConfig": {
+    "extends": [
+      "airbnb-base",
+      "plugin:prettier/recommended"
+    ],
+    "env": {
+      "es6": true
+    },
+    "globals": {
+      "harden": "readonly"
+    },
+    "rules": {
+      "implicit-arrow-linebreak": "off",
+      "function-paren-newline": "off",
+      "arrow-parens": "off",
+      "strict": "off",
+      "no-console": "off",
+      "no-unused-vars": [
+        "error",
+        {
+          "argsIgnorePattern": "^_",
+          "varsIgnorePattern": "^_"
+        }
+      ],
+      "no-return-assign": "off",
+      "no-param-reassign": "off",
+      "no-restricted-syntax": [
+        "off",
+        "ForOfStatement"
+      ],
+      "no-unused-expressions": "off",
+      "no-loop-func": "off",
+      "no-inner-declarations": "off",
+      "import/no-extraneous-dependencies": "off",
+      "import/prefer-default-export": "off"
+    }
   }
 }

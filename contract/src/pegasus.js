@@ -1,105 +1,30 @@
 // @ts-check
 
-// eslint-disable-next-line spaced-comment
-/// <reference types="ses"/>
-
 import { assert, details, q } from '@agoric/assert';
-import produceIssuer from '@agoric/ertp';
 import { makeNotifierKit } from '@agoric/notifier';
 import makeStore from '@agoric/store';
 import makeWeakStore from '@agoric/weak-store';
 import { E } from '@agoric/eventual-send';
 import Nat from '@agoric/nat';
 import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/multiaddr';
+import { assertProposalShape } from '@agoric/zoe/src/contractSupport';
 
-import { makeZoeHelpers } from '@agoric/zoe/src/contractSupport';
-
-import { makeZoeHelpers as makeOurZoeHelpers } from './helpers';
+import '@agoric/notifier/exports';
+import '../exported';
 
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';
 const DEFAULT_PROTOCOL = 'ics20-1';
 
-/**
- * @typedef {import('@agoric/ertp').Amount} Amount
- * @typedef {import('@agoric/ertp').Brand} Brand
- * @typedef {import('@agoric/ertp').Issuer} Issuer
- * @typedef {import('@agoric/ertp').Payment} Payment
- * @typedef {import('@agoric/ertp').PaymentP} PaymentP
- * @typedef {import('@agoric/swingset-vat/src/vats/network').Bytes} Bytes
- * @typedef {import('@agoric/swingset-vat/src/vats/network').Data} Data
- * @typedef {import('@agoric/swingset-vat/src/vats/network').Connection} Connection
- * @typedef {import('@agoric/swingset-vat/src/vats/network').ConnectionHandler} ConnectionHandler
- * @typedef {import('@agoric/swingset-vat/src/vats/network').Endpoint} Endpoint
- * @typedef {import('@agoric/zoe').OfferHook} OfferHook
- * @typedef {import('@agoric/zoe').ContractFacet} ContractFacet
- * @typedef {import('@agoric/zoe').Invite} Invite
- */
-
-/**
- * @template K,V
- * @typedef {import('@agoric/store').Store<K,V>} Store<K,V>
- */
-
-/**
- * @template K,V
- * @typedef {import('@agoric/weak-store').WeakStore<K,V>} WeakStore<K,V>
- */
-
-/**
- * @typedef {string} DenomUri
- * @typedef {string} Denom
- * @typedef {string} DepositAddress
- * @typedef {string} TransferProtocol
- *
- * @typedef {Object} Peg
- * @property {() => string} getAllegedName get the debug name
- * @property {() => Brand} getLocalBrand get the brand associated with the peg
- * @property {() => DenomUri} getDenomUri get the denomination identifier
- *
- * @typedef {Object} PegDescriptor
- * @property {Brand} localBrand
- * @property {DenomUri} denomUri
- * @property {string} allegedName
- */
-
-/**
- * @typedef {Object} BoardDepositFacet a registry for depositAddresses
- * @property {(id: string) => any} getValue return the corresponding DepositFacet
- */
-
-/**
- * @typedef {Object} FungibleTransferPacket
- * @property {string} amount The extent of the amount
- * @property {Denom} denomination The denomination of the amount
- * @property {string} [sender] The sender address
- * @property {DepositAddress} receiver The receiver deposit address
- */
-
-/**
- * @typedef {Object} TransferResult
- * @property {boolean} success True if the transfer was successful
- * @property {any} [error] The description of the error
- * @property {Payment} [refund] The refund if the transfer is known to have failed
- */
-
-/**
- * @typedef {(payment: PaymentP, depositAddress: DepositAddress) => Promise<TransferResult>} Sender
- * Successive transfers are not guaranteed to be processed in the order in which they were sent.
- * @typedef {(packet: FungibleTransferPacket) => Promise<unknown>} Receiver
- * @typedef {Object} Courier
- * @property {Sender} send
- * @property {Receiver} receive
- */
-
-/**
- * @template T
- * @typedef {import('@agoric/notifier').Notifier<T>} Notifier<T>
- */
+const TRANSFER_PROPOSAL_SHAPE = {
+  give: {
+    Transfer: null,
+  },
+};
 
 /**
  * Get the denomination combined with the network address.
  *
- * @param {Endpoint|PromiseLike<Endpoint>} endpointP network connection address
+ * @param {ERef<Endpoint>} endpointP network connection address
  * @param {Denom} denom denomination
  * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] the protocol to use
  * @returns {Promise<string>} denomination URI scoped to endpoint
@@ -117,7 +42,9 @@ async function makeDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
 
         // FIXME: We really should get this from the actual endpoint.
         const FIXME_FAKE_CHANNEL = ['ibc-channel', 'transfer'];
-        const protoChannel = pairs.find(([proto]) => proto === 'ibc-channel') || FIXME_FAKE_CHANNEL;
+        const protoChannel =
+          pairs.find(([proto]) => proto === 'ibc-channel') ||
+          FIXME_FAKE_CHANNEL;
         assert(protoChannel, details`Cannot find IBC channel in ${endpoint}`);
 
         const port = protoPort[1];
@@ -145,14 +72,14 @@ function makeICS20Converter(localBrand, prefixedDenom) {
    */
   function packetToLocalAmount(packet) {
     // packet.amount is a string in JSON.
-    const floatExtent = Number(packet.amount);
+    const floatValue = Number(packet.amount);
 
-    // If we overflow, or don't have a number, throw an exception!
-    const extent = Nat(floatExtent);
+    // If we overflow, or don't have a non-negative integer, throw an exception!
+    const value = Nat(floatValue);
 
     return harden({
       brand: localBrand,
-      extent,
+      value,
     });
   }
 
@@ -164,16 +91,16 @@ function makeICS20Converter(localBrand, prefixedDenom) {
    * @returns {FungibleTransferPacket}
    */
   function localAmountToPacket(amount, depositAddress) {
-    const { brand, extent } = amount;
+    const { brand, value } = amount;
     assert(
       brand === localBrand,
       details`Brand must our local issuer's, not ${q(brand)}`,
     );
-    const stringExtent = String(Nat(extent));
+    const stringValue = String(Nat(value));
 
     // Generate the ics20-1 packet.
     return harden({
-      amount: stringExtent,
+      amount: stringValue,
       denomination: prefixedDenom,
       receiver: depositAddress,
     });
@@ -187,7 +114,7 @@ function makeICS20Converter(localBrand, prefixedDenom) {
  *
  * @param {Connection} c
  * @param {FungibleTransferPacket} packet
- * @returns {Promise<TransferResult>}
+ * @returns {Promise<void>}
  */
 const sendTransferPacket = async (c, packet) => {
   const packetBytes = JSON.stringify(packet);
@@ -200,9 +127,6 @@ const sendTransferPacket = async (c, packet) => {
         // Let the next catch handle this error.
         throw error;
       }
-      return {
-        success: true,
-      };
     });
 };
 
@@ -210,21 +134,21 @@ const sendTransferPacket = async (c, packet) => {
  * Create the [send, receive] pair.
  *
  * @typedef {Object} CourierArgs
+ * @property {ContractFacet} zcf
  * @property {Connection} connection
  * @property {BoardDepositFacet} board
  * @property {DenomUri} denomUri
- * @property {Issuer} localIssuer
  * @property {Brand} localBrand
- * @property {(payment: Payment, amount: Amount) => Promise<unknown>} retain
- * @property {(amount: Amount) => Promise<Payment>} redeem
+ * @property {(zcfSeat: ZCFSeat, amounts: AmountKeywordRecord) => void} retain
+ * @property {(zcfSeat: ZCFSeat, amounts: AmountKeywordRecord) => void} redeem
  * @param {CourierArgs} arg0
  * @returns {Courier}
  */
 const makeCourier = ({
+  zcf,
   connection,
   board,
   denomUri,
-  localIssuer,
   localBrand,
   retain,
   redeem,
@@ -239,28 +163,28 @@ const makeCourier = ({
   );
 
   /** @type {Sender} */
-  const send = async (paymentP, depositAddress) => {
-    const [amount, payment] = await Promise.all([
-      E(localIssuer).getAmountOf(paymentP),
-      paymentP,
-    ]);
-    const packet = localAmountToPacket(amount, depositAddress);
+  const send = async (zcfSeat, depositAddress) => {
+    const tryToSend = async () => {
+      const amount = zcfSeat.getAmountAllocated('Transfer', localBrand);
+      const packet = localAmountToPacket(amount, depositAddress);
 
-    // Retain the payment.  We must not proceed on failure.
-    await retain(payment, amount);
+      // Retain the payment.  We must not proceed on failure.
+      retain(zcfSeat, { Transfer: amount });
 
-    // The payment is escrowed, so try sending.
-    return sendTransferPacket(connection, packet).catch(async error => {
-      // NOTE: Only do this if the *transfer* failed.
-      // Not so bad, we can return a refund.
-      const refund = await redeem(amount);
-      /** @type {TransferResult} */
-      const transferResult = {
-        success: false,
-        error,
-        refund,
-      };
-      return transferResult;
+      // The payment is already escrowed, and proposed to retain, so try sending.
+      return sendTransferPacket(connection, packet).then(
+        _ => zcfSeat.exit(),
+        reason => {
+          // Return the payment to the seat, if possible.
+          redeem(zcfSeat, { Transfer: amount });
+          throw reason;
+        },
+      );
+    };
+
+    // Reflect any error back to the seat.
+    return tryToSend().catch(reason => {
+      zcfSeat.kickOut(reason);
     });
   };
 
@@ -268,14 +192,33 @@ const makeCourier = ({
   const receive = async packet => {
     // Look up the deposit facet for this board address, if there is one.
     const depositAddress = packet.receiver;
-    const localAmount = packetToLocalAmount(packet);
     const depositFacet = await E(board).getValue(depositAddress);
+    const localAmount = packetToLocalAmount(packet);
+
+    const { userSeat, zcfSeat } = zcf.makeEmptySeatKit();
 
     // Redeem the backing payment.
-    const payment = await redeem(localAmount);
+    try {
+      redeem(zcfSeat, { Transfer: localAmount });
+      zcfSeat.exit();
+    } catch (e) {
+      zcfSeat.kickOut(e);
+      throw e;
+    }
 
-    // Send to the deposit facet, if we can.
-    return E(depositFacet).receive(payment);
+    // Once we've gotten to this point, their payment is committed and
+    // won't be refunded on a failed receive.
+    const payout = await E(userSeat).getPayout('Transfer');
+
+    // Send the payout promise to the deposit facet.
+    E(depositFacet)
+      .receive(payout)
+      .catch(_ => {});
+
+    // We don't want to wait for the depositFacet to return, so that
+    // it can't hang up (i.e. DoS) an ordered channel, which relies on
+    // us returning promptly.
+    return undefined;
   };
 
   return { send, receive };
@@ -288,17 +231,14 @@ const makeCourier = ({
  * @param {BoardDepositFacet} board where to find depositFacets
  */
 const makePegasus = (zcf, board) => {
-  const { checkHook, escrowAndAllocateTo } = makeZoeHelpers(zcf);
-  const { unescrow } = makeOurZoeHelpers(zcf);
-
-  /** @type {import('@agoric/notifier').NotifierRecord<Peg[]>} */
+  /** @type {NotifierRecord<Peg[]>} */
   const { notifier, updater } = makeNotifierKit([]);
 
   /**
    * @typedef {Object} LocalDenomState
    * @property {Store<DenomUri, Courier>} denomUriToCourier
    * @property {Set<Peg>} pegs
-   * @property {number} lastNonce
+   * @property {number} lastDenomNonce
    */
 
   /**
@@ -306,26 +246,14 @@ const makePegasus = (zcf, board) => {
    */
   const connectionToLocalDenomState = makeWeakStore('Connection');
 
-  /**
-   * @type {WeakStore<Brand, Issuer>}
-   */
-  const brandToIssuer = makeWeakStore('Brand');
-
   let lastLocalIssuerNonce = 0;
   /**
-   * Register a brand and issuer with the zcf.
-   * @param {Brand} localBrand
-   * @param {Issuer} localIssuer
+   * Create a new issuer keyword (based on Local + nonce)
+   * @returns {string}
    */
-  const registerBrand = async (localBrand, localIssuer) => {
-    if (brandToIssuer.has(localBrand)) {
-      // Already exists.
-      return;
-    }
+  const createLocalIssuerKeyword = () => {
     lastLocalIssuerNonce += 1;
-    const localIssuerKeyword = `Local${lastLocalIssuerNonce}`;
-    await zcf.addNewIssuer(localIssuer, localIssuerKeyword);
-    brandToIssuer.init(localBrand, localIssuer);
+    return `Local${lastLocalIssuerNonce}`;
   };
 
   /**
@@ -335,6 +263,11 @@ const makePegasus = (zcf, board) => {
 
   /**
    * Create a fresh Peg associated with a descriptor.
+   *
+   * @typedef {Object} PegDescriptor
+   * @property {Brand} localBrand
+   * @property {DenomUri} denomUri
+   * @property {string} allegedName
    *
    * @param {Connection} c
    * @param {PegDescriptor} desc
@@ -382,7 +315,7 @@ const makePegasus = (zcf, board) => {
           connectionToLocalDenomState.init(c, {
             denomUriToCourier,
             pegs,
-            lastNonce: 0,
+            lastDenomNonce: 0,
           });
         },
         async onReceive(c, packetBytes) {
@@ -418,9 +351,11 @@ const makePegasus = (zcf, board) => {
      * Peg a remote asset over a network connection.
      *
      * @param {string} allegedName
-     * @param {Connection|PromiseLike<Connection>} connectionP The network connection (IBC channel) to communicate over
+     * @param {ERef<Connection>} connectionP The network connection (such as IBC
+     * channel) to communicate over
      * @param {Denom} remoteDenom Remote denomination
-     * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of amount math for the pegged extents
+     * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of
+     * amount math for the pegged values
      * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
      * @returns {Promise<Peg>}
      */
@@ -463,25 +398,21 @@ const makePegasus = (zcf, board) => {
       );
 
       // Create the issuer for the local erights corresponding to the remote values.
-      const {
-        issuer: localIssuer,
-        mint: localMint,
-        brand: localBrand,
-      } = produceIssuer(denomUri, amountMathKind);
-
-      // Ensure the issuer can be used in Zoe offers.
-      await registerBrand(localBrand, localIssuer);
+      const localKeyword = createLocalIssuerKeyword();
+      const zcfMint = await zcf.makeZCFMint(localKeyword, amountMathKind);
+      const { brand: localBrand } = zcfMint.getIssuerRecord();
 
       // Describe how to retain/redeem pegged shadow erights.
       const courier = makeCourier({
+        zcf,
         connection: c,
+        localBrand,
         board,
         denomUri,
-        localIssuer,
-        localBrand,
-        retain: (payment, amount) =>
-          localIssuer.burn(localIssuer.claim(payment, amount)),
-        redeem: amount => E(localMint).mintPayment(amount),
+        retain: (zcfSeat, amounts) => zcfMint.burnLosses(amounts, zcfSeat),
+        redeem: (zcfSeat, amounts) => {
+          zcfMint.mintGains(amounts, zcfSeat);
+        },
       });
 
       const { denomUriToCourier, pegs } = connectionToLocalDenomState.get(c);
@@ -494,9 +425,12 @@ const makePegasus = (zcf, board) => {
      * Peg a local asset over a network connection.
      *
      * @param {string} allegedName
-     * @param {Connection|PromiseLike<Connection>} connectionP The network connection (IBC channel) to communicate over
-     * @param {Issuer} localIssuer Local ERTP issuer whose assets should be pegged to c
-     * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak on the connection
+     * @param {ERef<Connection>} connectionP The network connection (such as IBC
+     * channel) to communicate over
+     * @param {Issuer} localIssuer Local ERTP issuer whose assets should be
+     * pegged to the connection
+     * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak
+     * on the connection
      * @returns {Promise<Peg>}
      */
     async pegLocal(
@@ -519,31 +453,74 @@ const makePegasus = (zcf, board) => {
 
       // We need the last nonce for our denom name.
       const localDenomState = connectionToLocalDenomState.get(c);
-      localDenomState.lastNonce += 1;
-      const denom = `pegasus${localDenomState.lastNonce}`;
+      localDenomState.lastDenomNonce += 1;
+      const denom = `pegasus${localDenomState.lastDenomNonce}`;
 
       // Find our data elements.
       const allegedLocalAddress = await E(c).getLocalAddress();
       const denomUri = await makeDenomUri(allegedLocalAddress, denom, protocol);
 
-      // Create a purse in which to keep our denomination.
-      const [backingPurse, localBrand] = await Promise.all([
-        E(localIssuer).makeEmptyPurse(),
-        E(localIssuer).getBrand(),
-      ]);
+      // Create a seat in which to keep our denomination.
+      const { zcfSeat: poolSeat } = zcf.makeEmptySeatKit();
 
       // Ensure the issuer can be used in Zoe offers.
-      await registerBrand(localBrand, localIssuer);
+      const localKeyword = createLocalIssuerKeyword();
+      const {
+        brand: localBrand,
+        amountMath: localAmountMath,
+      } = await zcf.saveIssuer(localIssuer, localKeyword);
+
+      /**
+       * Transfer amount (of localBrand and localAmountMath) from loser to winner seats.
+       * @param {Amount} amount amount to transfer
+       * @param {Keyword} loserKeyword the keyword to take from the loser
+       * @param {ZCFSeat} loser seat to transfer from
+       * @param {Keyword} winnerKeyword the keyword to give to the winner
+       * @param {ZCFSeat} winner seat to transfer to
+       */
+      const transferAmountFrom = (
+        amount,
+        loserKeyword,
+        loser,
+        winnerKeyword,
+        winner,
+      ) => {
+        // Transfer the amount to our backing seat.
+        const currentLoser = loser.getAmountAllocated(loserKeyword, localBrand);
+        const currentWinner = winner.getAmountAllocated(
+          winnerKeyword,
+          localBrand,
+        );
+        const newLoser = localAmountMath.subtract(currentLoser, amount);
+        const newWinner = localAmountMath.add(currentWinner, amount);
+        const loserStage = loser.stage({ [loserKeyword]: newLoser });
+        const winnerStage = winner.stage({ [winnerKeyword]: newWinner });
+        zcf.reallocate(loserStage, winnerStage);
+      };
 
       // Describe how to retain/redeem real local erights.
       const courier = makeCourier({
+        zcf,
         connection: c,
         board,
         denomUri,
-        localIssuer,
         localBrand,
-        retain: (payment, amount) => E(backingPurse).deposit(payment, amount),
-        redeem: amount => E(backingPurse).withdraw(amount),
+        retain: (transferSeat, amounts) =>
+          transferAmountFrom(
+            amounts.Transfer,
+            'Transfer',
+            transferSeat,
+            'Pool',
+            poolSeat,
+          ),
+        redeem: (transferSeat, amounts) =>
+          transferAmountFrom(
+            amounts.Transfer,
+            'Pool',
+            poolSeat,
+            'Transfer',
+            transferSeat,
+          ),
       });
 
       const { denomUriToCourier, pegs } = localDenomState;
@@ -558,7 +535,7 @@ const makePegasus = (zcf, board) => {
      * @returns {Promise<Issuer>}
      */
     async getLocalIssuer(localBrand) {
-      return brandToIssuer.get(localBrand);
+      return zcf.getIssuerForBrand(localBrand);
     },
 
     /**
@@ -569,82 +546,32 @@ const makePegasus = (zcf, board) => {
     },
 
     /**
-     * Create a Zoe invite to transfer assets over network to a deposit address.
+     * Create a Zoe invitation to transfer assets over network to a deposit address.
      *
-     * @param {Peg|Promise<Peg>} pegP the peg over which to transfer
+     * @param {ERef<Peg>} pegP the peg over which to transfer
      * @param {DepositAddress} depositAddress the remote receiver's address
-     * @returns {Promise<Invite>} to transfer, make an offer of { give: { Transfer: pegAmount } } to this invite
+     * @returns {Promise<Invitation>} to transfer, make an offer of { give: { Transfer: pegAmount } } to this invitation
      */
-    async makeInviteToTransfer(pegP, depositAddress) {
+    async makeInvitationToTransfer(pegP, depositAddress) {
       // Verify the peg.
       const peg = await pegP;
       const c = pegToConnection.get(peg);
 
       // Get details from the peg.
-      const [localBrand, denomUri] = await Promise.all([
-        E(peg).getLocalBrand(),
-        E(peg).getDenomUri(),
-      ]);
+      const denomUri = await E(peg).getDenomUri();
       const { denomUriToCourier } = connectionToLocalDenomState.get(c);
       const { send } = denomUriToCourier.get(denomUri);
 
       /**
-       * @type {OfferHook}
+       * Attempt the transfer, returning a refund if failed.
+       * @type {OfferHandler}
        */
-      const offerHook = async offerHandle => {
-        const everything = zcf.getCurrentAllocation(offerHandle).Transfer;
-
-        assert(
-          everything.brand === localBrand,
-          details`Transfer brand doesn't match Pegasus handle's localBrand`,
-        );
-
-        // Fetch the transfer payment.
-        const transferPaymentP = unescrow({
-          amount: everything,
-          keyword: 'Transfer',
-          donorHandle: offerHandle,
-        });
-
-        // Attempt the transfer, returning a refund if failed.
-        const { success, error, refund } = await send(
-          transferPaymentP,
-          depositAddress,
-        );
-
-        if (success) {
-          // They got what they wanted!
-          zcf.complete([offerHandle]);
-          return;
-        }
-
-        if (!refund) {
-          // There's nothing we can do, since the transfer protocol
-          // failed to give us the refund.
-          zcf.complete(harden([offerHandle]));
-          throw error;
-        }
-
-        // Return the refund to the player.
-        await escrowAndAllocateTo({
-          amount: everything,
-          payment: refund,
-          keyword: 'Transfer',
-          recipientHandle: offerHandle,
-        });
-        zcf.complete(harden([offerHandle]));
-        throw error;
+      const offerHandler = zcfSeat => {
+        assertProposalShape(zcfSeat, TRANSFER_PROPOSAL_SHAPE);
+        send(zcfSeat, depositAddress);
       };
 
-      const transferExpected = harden({
-        give: {
-          Transfer: null,
-        },
-      });
-      return zcf.makeInvitation(
-        checkHook(offerHook, transferExpected),
-        'pegasus transfer',
-      );
+      return zcf.makeInvitation(offerHandler, 'pegasus transfer');
     },
   });
 };
@@ -654,21 +581,17 @@ const makePegasus = (zcf, board) => {
  */
 
 /**
- * @type {import('@agoric/zoe').MakeContract}
+ * @type {ContractStartFn}
  */
-const makeContract = zcf => {
-  const { board } = zcf.getInstanceRecord().terms;
+const start = zcf => {
+  const { board } = zcf.getTerms();
 
-  const publicAPI = makePegasus(zcf, board);
-  zcf.initPublicAPI(publicAPI);
-
-  const adminHook = _offerHandle => {
-    return `no administrative capabilities`;
+  return {
+    publicFacet: makePegasus(zcf, board),
   };
-  return zcf.makeInvitation(adminHook, 'admin');
 };
 
 harden(makeDenomUri);
-harden(makeContract);
+harden(start);
 harden(makePegasus);
-export { makeContract, makePegasus, makeDenomUri };
+export { start, makePegasus, makeDenomUri };
