@@ -43,6 +43,11 @@ export const makePurse = (mint, brand, amountMath, issuer, initialBalance) => {
     updater: balanceUpdater,
   } = makeNotifierKit(initialBalance);
 
+  const signTransferFromUserPeggyAccountToIBCTransferModuleOnPeggy = () => {
+    // TODO: magic that can't be done within pegasus because it
+    // doesn't have the private keys for a user
+  };
+
   const getCurrentBalance = () => {
     // TODO: some magic going to peggy chain or cosmos-sdk
     return balance;
@@ -74,6 +79,8 @@ export const makePurse = (mint, brand, amountMath, issuer, initialBalance) => {
     },
     withdraw: amount => {
       amount = amountMath.coerce(amount);
+      signTransferFromUserPeggyAccountToIBCTransferModuleOnPeggy();
+      // makePegConnectionHandler.onReceive() does the minting?
       const payment = mint.mintPayment(amount);
       // Commit point
       // Move the withdrawn assets from this purse into a new payment
