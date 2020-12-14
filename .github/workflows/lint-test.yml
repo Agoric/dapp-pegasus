@@ -51,7 +51,7 @@ jobs:
         yarn install
         yarn build
         yarn link-cli $HOME/bin/agoric
-        echo "::add-path::$HOME/bin"
+        echo "/home/runner/bin" >> $GITHUB_PATH
       working-directory: ~/agoric-sdk
 
     - name: agoric install
