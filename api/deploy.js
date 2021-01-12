@@ -87,20 +87,22 @@ export default async function deployApi(
   console.log(`-- Instance Registry Key: ${INSTANCE_BOARD_ID}`);
   console.log(`-- Peg Registry Key`);
 
-  // We want the Gaia connection to run persistently. (Scripts such as this
-  // deploy.js script are ephemeral and all connections to objects
-  // within this script are severed when the script is done running.)
-  // To run the handler persistently, we must use the spawner to run
-  // the code on this machine even when the script is done running.
+  if (0) {
+    // We want the Gaia connection to run persistently. (Scripts such as this
+    // deploy.js script are ephemeral and all connections to objects
+    // within this script are severed when the script is done running.)
+    // To run the handler persistently, we must use the spawner to run
+    // the code on this machine even when the script is done running.
 
-  // Bundle up the handler code
-  const bundle = await bundleSource(pathResolve('./src/gaiaTransfer.js'));
+    // Bundle up the handler code
+    const bundle = await bundleSource(pathResolve('./src/gaiaTransfer.js'));
 
-  // Install it on the spawner
-  const gaiaInstall = E(spawner).install(bundle);
+    // Install it on the spawner
+    const gaiaInstall = E(spawner).install(bundle);
 
-  // Spawn the sim gaia transfer handler.
-  await E(gaiaInstall).spawn({ port: ibcport[1] });
+    // Spawn the sim gaia transfer handler.
+    await E(gaiaInstall).spawn({ port: ibcport[1] });
+  }
   const GAIA_IBC_ADDRESS = await E(ibcport[1]).getLocalAddress();
 
   // Re-save the constants somewhere where the UI and api can find it.

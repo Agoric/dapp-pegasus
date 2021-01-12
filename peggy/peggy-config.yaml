@@ -1,0 +1,52 @@
+global:
+  timeout: 30s
+  light-cache-size: 20000
+chains:
+#- key: peggy-cosmos
+#  chain-id: peggy-testnet1
+#  rpc-addr: http://104.236.19.8:26657
+#  account-prefix: cosmos
+#  gas-adjustment: 1.3
+#  gas-prices: ""
+#  trusting-period: 336h
+- key: peggy-cosmos
+  chain-id: peggy-test
+  rpc-addr: http://localhost:26657
+  account-prefix: cosmos
+  gas-adjustment: 1.3
+  gas-prices: ""
+  trusting-period: 336h
+# - key: peggy-cosmos
+#   chain-id: agorictest-4
+#   rpc-addr: http://node0.testnet.agoric.com:26657
+#   account-prefix: agoric
+#   gas-adjustment: 1.3
+#   gas-prices: ""
+#   trusting-period: 336h
+- key: peggy-cosmos
+  chain-id: agoric
+  rpc-addr: http://localhost:25657
+  account-prefix: agoric
+  gas-adjustment: 1.3
+  gas-prices: ""
+  trusting-period: 336h
+paths:
+  ethree:
+    src:
+      chain-id: peggy-test
+      client-id: agoricclientten
+      connection-id: agoriclinkten
+      channel-id: agoricxferpeggyethree
+      port-id: transfer
+      order: unordered
+      version: ics20-1
+    dst:
+      chain-id: agoric
+      client-id: peggyclientten
+      connection-id: peggylinkten
+      channel-id: peggyxferagoricethree
+      port-id: portbvmnfb
+      order: unordered
+      version: ics20-1
+    strategy:
+      type: naive

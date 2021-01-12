@@ -9,7 +9,7 @@ import Nat from '@agoric/nat';
 import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/multiaddr';
 import { assertProposalShape } from '@agoric/zoe/src/contractSupport';
 
-import '@agoric/notifier/exports';
+import '@agoric/notifier/exported';
 import '../exported';
 
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';
@@ -94,14 +94,14 @@ function makeICS20Converter(localBrand, prefixedDenom) {
     const { brand, value } = amount;
     assert(
       brand === localBrand,
-      details`Brand must our local issuer's, not ${q(brand)}`,
+      details`Brand must be our local issuer's, not ${q(brand)}`,
     );
     const stringValue = String(Nat(value));
 
     // Generate the ics20-1 packet.
     return harden({
       amount: stringValue,
-      denomination: prefixedDenom,
+      denom: prefixedDenom,
       receiver: depositAddress,
     });
   }
@@ -191,7 +191,7 @@ const makeCourier = ({
   /** @type {Receiver} */
   const receive = async packet => {
     // Look up the deposit facet for this board address, if there is one.
-    const depositAddress = packet.receiver;
+    const depositAddress = packet.receiver.replace(/^board:/, '');
     const depositFacet = await E(board).getValue(depositAddress);
     const localAmount = packetToLocalAmount(packet);
 
@@ -324,16 +324,16 @@ const makePegasus = (zcf, board) => {
            * @type {FungibleTransferPacket}
            */
           const packet = JSON.parse(packetBytes);
-          const denomUri = `ics20-1:${packet.denomination}`;
+          const denomUri = `ics20-1:${packet.denom}`;
           const { receive } = denomUriToCourier.get(denomUri);
           return receive(packet)
             .then(_ => {
-              const ack = { success: true };
+              const ack = { result: 'AA==' };
               return JSON.stringify(ack);
             })
             .catch(error => {
               // On failure, just return the stringified error.
-              const nack = { success: false, error: `${error}` };
+              const nack = { error: `${error}` };
               return JSON.stringify(nack);
             });
         },
@@ -369,7 +369,7 @@ const makePegasus = (zcf, board) => {
       // Assertions
       assert(
         // TODO: Find the exact restrictions on Cosmos denoms.
-        remoteDenom.match(/^[a-z][a-z0-9]*$/),
+        remoteDenom.match(/^[a-z][a-z0-9]*$/i),
         details`Invalid ics20-1 remoteDenom ${q(
           remoteDenom,
         )}; need Cosmos denomination format`,
@@ -390,12 +390,8 @@ const makePegasus = (zcf, board) => {
       );
 
       // Find our data elements.
-      const allegedLocalAddress = await E(c).getLocalAddress();
-      const denomUri = await makeDenomUri(
-        allegedLocalAddress,
-        remoteDenom,
-        protocol,
-      );
+      // Remote pegs have no port/channel prefix.
+      const denomUri = `${protocol}:${remoteDenom}`;
 
       // Create the issuer for the local erights corresponding to the remote values.
       const localKeyword = createLocalIssuerKeyword();
