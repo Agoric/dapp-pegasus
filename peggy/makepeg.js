@@ -6,11 +6,14 @@
 // issuer and purse to an individual wallet.
 
 import { E } from '@agoric/eventual-send';
-import { DEMO_PEGS } from './demoConfig';
-import dappConstants from '../ui.old/public/conf/defaults';
+// import { spawn } from 'child_process';
 
 import '@agoric/zoe/exported';
 import '@agoric/swingset-vat/src/vats/network/types';
+import { makePromiseKit } from '@agoric/promise-kit';
+
+import { DEMO_PEGS } from './demoConfig';
+import dappConstants from '../ui.old/public/conf/defaults';
 
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js
@@ -70,18 +73,36 @@ export default async function getCollateralIssuers(
   const conn = await E(listenerInstall).spawn({ chandler, port: ibcport[0] });
 
   const collateralIssuers = await Promise.all(
-    DEMO_PEGS.map(async ({ symbol, denom }) => {
-      console.log('Creating', symbol, denom);
-      const peg = await E(pegasus).pegRemote(symbol, conn, denom);
+    DEMO_PEGS.map(
+      async ({
+        symbol,
+        denom,
+        giftValue,
+        _collateralValue,
+        decimalPlaces,
+        scaleToLocalPlaces,
+      }) => {
+        console.log('Creating', symbol, denom);
+        const peg = await E(pegasus).pegRemote(symbol, conn, denom, {
+          decimalPlaces,
+          scaleToLocalPlaces,
+        });
 
-      const localBrand = await E(peg).getLocalBrand();
-      const localIssuer = await E(pegasus).getLocalIssuer(localBrand);
-      return localIssuer;
-    }),
+        const localBrand = await E(peg).getLocalBrand();
+        const localIssuer = await E(pegasus).getLocalIssuer(localBrand);
+
+        return {
+          symbol,
+          issuer: localIssuer,
+          brand: localBrand,
+        };
+      },
+    ),
   );
 
   if (collateralIssuers.length) {
     await E(scratch).set('treasuryCollateralIssuers', collateralIssuers);
   }
-  console.log('Have treasuryCollateralIssuers', ...collateralIssuers);
+  console.log('Have', collateralIssuers.length, 'treasuryCollateralIssuers');
+  console.log('Next deploy callpeg.js');
 }

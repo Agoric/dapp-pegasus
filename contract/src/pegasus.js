@@ -1,4 +1,5 @@
 // @ts-check
+/* global BigInt */
 
 import { assert, details, q } from '@agoric/assert';
 import { makeNotifierKit } from '@agoric/notifier';
@@ -62,8 +63,16 @@ async function makeDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
  * Translate to and from local tokens.
  * @param {Brand} localBrand
  * @param {string} prefixedDenom
+ * @param {number} scaleToLocalPlaces
  */
-function makeICS20Converter(localBrand, prefixedDenom) {
+function makeICS20Converter(localBrand, prefixedDenom, scaleToLocalPlaces) {
+  const scale = (value, factor) => {
+    const bvalue = BigInt(value);
+    if (factor < 0) {
+      return bvalue / BigInt(10) ** BigInt(-factor);
+    }
+    return bvalue * BigInt(10) ** BigInt(factor);
+  };
   /**
    * Convert an inbound packet to a local amount.
    *
@@ -72,7 +81,9 @@ function makeICS20Converter(localBrand, prefixedDenom) {
    */
   function packetToLocalAmount(packet) {
     // packet.amount is a string in JSON.
-    const floatValue = Number(packet.amount);
+    const remoteValue = scale(packet.amount, scaleToLocalPlaces);
+
+    const floatValue = Number(remoteValue);
 
     // If we overflow, or don't have a non-negative integer, throw an exception!
     const value = Nat(floatValue);
@@ -96,11 +107,12 @@ function makeICS20Converter(localBrand, prefixedDenom) {
       brand === localBrand,
       details`Brand must be our local issuer's, not ${q(brand)}`,
     );
-    const stringValue = String(Nat(value));
+    const localValue = Nat(value);
+    const remoteValue = scale(localValue, -scaleToLocalPlaces);
 
     // Generate the ics20-1 packet.
     return harden({
-      amount: stringValue,
+      amount: `${remoteValue}`,
       denom: prefixedDenom,
       receiver: depositAddress,
     });
@@ -139,6 +151,7 @@ const sendTransferPacket = async (c, packet) => {
  * @property {BoardDepositFacet} board
  * @property {DenomUri} denomUri
  * @property {Brand} localBrand
+ * @property {number} scaleToLocalPlaces
  * @property {(zcfSeat: ZCFSeat, amounts: AmountKeywordRecord) => void} retain
  * @property {(zcfSeat: ZCFSeat, amounts: AmountKeywordRecord) => void} redeem
  * @param {CourierArgs} arg0
@@ -152,6 +165,7 @@ const makeCourier = ({
   localBrand,
   retain,
   redeem,
+  scaleToLocalPlaces,
 }) => {
   const uriMatch = denomUri.match(/^[^:]+:(.*)$/);
   assert(uriMatch, details`denomUri ${q(denomUri)} does not look like a URI`);
@@ -160,6 +174,7 @@ const makeCourier = ({
   const { localAmountToPacket, packetToLocalAmount } = makeICS20Converter(
     localBrand,
     prefixedDenom,
+    scaleToLocalPlaces,
   );
 
   /** @type {Sender} */
@@ -348,23 +363,32 @@ const makePegasus = (zcf, board) => {
       };
     },
     /**
+     * @typedef {Object} RemoteOptions
+     * @property {TransferProtocol=} protocol
+     * @property {string=} amountMathKind
+     * @property {number=} decimalPlaces
+     * @property {number=} scaleToLocalPlaces
+     */
+    /**
      * Peg a remote asset over a network connection.
      *
      * @param {string} allegedName
      * @param {ERef<Connection>} connectionP The network connection (such as IBC
      * channel) to communicate over
      * @param {Denom} remoteDenom Remote denomination
-     * @param {string} [amountMathKind=DEFAULT_AMOUNT_MATH_KIND] The kind of
-     * amount math for the pegged values
-     * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL]
+     * @param {RemoteOptions} arg3
      * @returns {Promise<Peg>}
      */
     async pegRemote(
       allegedName,
       connectionP,
       remoteDenom,
-      amountMathKind = DEFAULT_AMOUNT_MATH_KIND,
-      protocol = DEFAULT_PROTOCOL,
+      {
+        decimalPlaces = 0,
+        scaleToLocalPlaces = 0,
+        amountMathKind = DEFAULT_AMOUNT_MATH_KIND,
+        protocol = DEFAULT_PROTOCOL,
+      },
     ) {
       // Assertions
       assert(
@@ -395,7 +419,9 @@ const makePegasus = (zcf, board) => {
 
       // Create the issuer for the local erights corresponding to the remote values.
       const localKeyword = createLocalIssuerKeyword();
-      const zcfMint = await zcf.makeZCFMint(localKeyword, amountMathKind);
+      const zcfMint = await zcf.makeZCFMint(localKeyword, amountMathKind, {
+        decimalPlaces,
+      });
       const { brand: localBrand } = zcfMint.getIssuerRecord();
 
       // Describe how to retain/redeem pegged shadow erights.
@@ -409,6 +435,7 @@ const makePegasus = (zcf, board) => {
         redeem: (zcfSeat, amounts) => {
           zcfMint.mintGains(amounts, zcfSeat);
         },
+        scaleToLocalPlaces,
       });
 
       const { denomUriToCourier, pegs } = connectionToLocalDenomState.get(c);
@@ -418,6 +445,12 @@ const makePegasus = (zcf, board) => {
     },
 
     /**
+     * @typedef {Object} LocalOptions
+     * @property {TransferProtocol=} protocol
+     * @property {number=} scaleToLocalPlaces
+     */
+
+    /**
      * Peg a local asset over a network connection.
      *
      * @param {string} allegedName
@@ -425,7 +458,7 @@ const makePegasus = (zcf, board) => {
      * channel) to communicate over
      * @param {Issuer} localIssuer Local ERTP issuer whose assets should be
      * pegged to the connection
-     * @param {TransferProtocol} [protocol=DEFAULT_PROTOCOL] Protocol to speak
+     * @param {LocalOptions} arg3
      * on the connection
      * @returns {Promise<Peg>}
      */
@@ -433,7 +466,7 @@ const makePegasus = (zcf, board) => {
       allegedName,
       connectionP,
       localIssuer,
-      protocol = DEFAULT_PROTOCOL,
+      { protocol = DEFAULT_PROTOCOL, scaleToLocalPlaces = 0 },
     ) {
       // Assertions
       assert(
@@ -517,6 +550,7 @@ const makePegasus = (zcf, board) => {
             'Transfer',
             transferSeat,
           ),
+        scaleToLocalPlaces,
       });
 
       const { denomUriToCourier, pegs } = localDenomState;

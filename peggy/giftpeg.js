@@ -33,14 +33,17 @@ export default async function giftCollateral(homePromise) {
   } = home;
 
   const walletBridge = E(wallet).getScopedBridge(
-    'Pegasus',
-    'https://peg-as.us',
+    'Treasury',
+    'http://localhost:3000',
   );
 
   console.log('Waiting for dapp approval in wallet');
   const collateralIssuers = await E(scratch).get('treasuryCollateralIssuers');
   await Promise.all(
     DEMO_PEGS.map(async ({ symbol, giftValue }, i) => {
+      if ((process.env.GIFT_SYMBOL || symbol) !== symbol) {
+        return;
+      }
       console.log('Gifting', symbol, giftValue);
       const issuerKit = collateralIssuers[i];
       const issuerMath = await makeLocalAmountMath(issuerKit.issuer);

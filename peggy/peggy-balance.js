@@ -1,7 +1,7 @@
 #! /usr/bin/env node
 
 const { spawn } = require('child_process');
-// const util = require('util');
+const util = require('util');
 
 // peggy keys show -a peggy-cosmos
 // const ADDRESS = 'cosmos1nqypqptka5w9eph6kdvguvujnxhmn3l8u9guuc';
@@ -16,10 +16,28 @@ const makeQueries = addr => [
   `tm.event='Tx' AND transfer.recipient='${addr}'`,
 ];
 
+const spawnUntilSuccess = (...args) =>
+  new Promise(resolve => {
+    const loop = retry => {
+      const cp = spawn(...args);
+      cp.on('exit', code => {
+        console.log('exit status:', code);
+        if (code && retry > 0) {
+          setTimeout(() => loop(retry - 1), 3000);
+        } else {
+          resolve(code);
+        }
+      });
+    };
+    loop(10);
+  });
+
 if (ADDRESS) {
   console.log(`Subscribing for ${ADDRESS} balances`);
   queryBalances(ADDRESS, balances => {
-    const bals = balances.map(({denom, amount}) => `${amount}${denom}`).join('\n'); 
+    const bals = balances
+      .map(({ denom, amount }) => `${amount}${denom}`)
+      .join('\n');
     if (bals) {
       console.log(bals);
     }
@@ -46,21 +64,33 @@ if (ADDRESS) {
           if (unsubs.has(address)) {
             return;
           }
-          const streamer = balances => send({ type: 'PEGGY_BALANCE', payload: { address, balances }});
+          const streamer = balances =>
+            send({ type: 'PEGGY_BALANCE', payload: { address, balances } });
           unsubs.set(address, queryBalances(address, streamer));
           break;
         }
 
         case 'PEGGY_AGORIC_TRANSFER': {
           const { denom, amount, recipient } = obj.payload;
-          const cp = spawn('rly', ['tx', 'raw', 'transfer', 'peggy-test', 'agoric', `${amount}${denom}`, `raw:${recipient}`], { stdio: ['ignore', 'pipe', 'inherit']});
-          const obufs = [];
-          cp.stdout.on('data', chunk => {
-            obufs.push(chunk);
-          });
-          cp.stdout.on('close', () => {
-            send({ type: 'PEGGY_TRANSFER_COMPLETE', payload: Buffer.concat(obufs).toString('utf-8')})
-          });
+          spawnUntilSuccess(
+            'rly',
+            [
+              'tx',
+              'raw',
+              'transfer',
+              'peggy-test',
+              'agoric',
+              `${amount}${denom}`,
+              `raw:${recipient}`,
+            ],
+            { stdio: ['ignore', 'inherit', 'inherit'] },
+          );
+
+          break;
+        }
+
+        default: {
+          // do nothing
           break;
         }
       }
@@ -99,20 +129,23 @@ function queryBalances(addr, streamBalances) {
   ws.addEventListener('message', ev => {
     const obj = JSON.parse(ev.data);
     const query = queries[obj.id - BASE_MAGIC_ID];
-    // console.log(util.inspect(obj, false, Infinity));
+    console.log(util.inspect(obj, false, Infinity));
     if (query === undefined) {
       return;
     }
     // console.log('query', query);
-    const cp = spawn('peggy', ['query', 'bank', 'balances', '-ojson', addr], { stdio: ['ignore', 'pipe', 'inherit']});
+    const cp = spawn('peggy', ['query', 'bank', 'balances', '-ojson', addr], {
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
     const obufs = [];
     cp.stdout.on('data', chunk => {
       obufs.push(chunk);
     });
     cp.stdout.on('close', () => {
       const js = Buffer.concat(obufs).toString('utf-8');
-      const obj = JSON.parse(js);
-      streamBalances(obj.balances);
+      const out = JSON.parse(js);
+      console.log(out);
+      streamBalances(out.balances);
     });
   });
 

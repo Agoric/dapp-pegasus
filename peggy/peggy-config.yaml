@@ -31,20 +31,20 @@ chains:
   gas-prices: ""
   trusting-period: 336h
 paths:
-  ethree:
+  fate:
     src:
       chain-id: peggy-test
-      client-id: agoricclientten
-      connection-id: agoriclinkten
-      channel-id: agoricxferpeggyethree
+      client-id: agoricclientfate
+      connection-id: agoriclinkfate
+      channel-id: agoricxferpeggyfat
       port-id: transfer
       order: unordered
       version: ics20-1
     dst:
       chain-id: agoric
-      client-id: peggyclientten
-      connection-id: peggylinkten
-      channel-id: peggyxferagoricethree
+      client-id: peggyclientfate
+      connection-id: peggylinkfate
+      channel-id: peggyxferagoricfat
       port-id: portbvmnfb
       order: unordered
       version: ics20-1
