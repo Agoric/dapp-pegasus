@@ -1,5 +1,5 @@
 {
-  "name": "dapp-peg-api",
+  "name": "dapp-pegasus-api",
   "private": true,
   "version": "0.1.0",
   "description": "dapp-encouragement Agoric Dapp web server handler",

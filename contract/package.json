@@ -1,5 +1,5 @@
 {
-  "name": "dapp-peg-contract",
+  "name": "dapp-pegasus-contract",
   "version": "0.1.0",
   "private": true,
   "description": "Contract for the Network Pegging Agoric Dapp",

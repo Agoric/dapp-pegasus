@@ -1,5 +1,5 @@
 {
-  "name": "dapp-peg-agservers",
+  "name": "dapp-pegasus-agservers",
   "version": "0.0.1",
   "description": "Agoric server instances for dapp-encouragement",
   "private": true,
