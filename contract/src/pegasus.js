@@ -5,11 +5,11 @@ import { makeNotifierKit } from '@agoric/notifier';
 import makeStore from '@agoric/store';
 import makeWeakStore from '@agoric/weak-store';
 import { E } from '@agoric/eventual-send';
-import Nat from '@agoric/nat';
+import { Nat } from '@agoric/nat';
 import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/multiaddr';
 import { assertProposalShape } from '@agoric/zoe/src/contractSupport';
 
-import '@agoric/notifier/exports';
+import '@agoric/notifier/exported';
 import '../exported';
 
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';

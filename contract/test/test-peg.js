@@ -110,7 +110,7 @@ async function testRemotePeg(t) {
   const localAtomsAmount = await E(localPurseP).getCurrentAmount();
   t.deepEquals(
     localAtomsAmount,
-    { brand: localBrand, value: 100 },
+    { brand: localBrand, value: 100n },
     'we received the shadow atoms',
   );
 
