@@ -69,7 +69,7 @@ async function testRemotePeg(t) {
           t.deepEquals(
             packet,
             {
-              amount: '100',
+              amount: '100000000000000000001',
               denomination: 'portdef/chanabc/uatom',
               receiver: 'markaccount',
             },
@@ -94,7 +94,7 @@ async function testRemotePeg(t) {
 
   // Get some local Atoms.
   const sendPacket = {
-    amount: '100',
+    amount: '100000000000000000001',
     denomination: 'portdef/chanabc/uatom',
     receiver: '0x1234',
     sender: 'FIXME:sender',
@@ -110,7 +110,7 @@ async function testRemotePeg(t) {
   const localAtomsAmount = await E(localPurseP).getCurrentAmount();
   t.deepEquals(
     localAtomsAmount,
-    { brand: localBrand, value: 100n },
+    { brand: localBrand, value: 100000000000000000001n },
     'we received the shadow atoms',
   );
 

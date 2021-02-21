@@ -72,10 +72,10 @@ function makeICS20Converter(localBrand, prefixedDenom) {
    */
   function packetToLocalAmount(packet) {
     // packet.amount is a string in JSON.
-    const floatValue = Number(packet.amount);
+    const bigValue = BigInt(packet.amount);
 
     // If we overflow, or don't have a non-negative integer, throw an exception!
-    const value = Nat(floatValue);
+    const value = Nat(bigValue);
 
     return harden({
       brand: localBrand,
