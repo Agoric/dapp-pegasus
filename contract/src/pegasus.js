@@ -5,11 +5,11 @@ import { makeNotifierKit } from '@agoric/notifier';
 import makeStore from '@agoric/store';
 import makeWeakStore from '@agoric/weak-store';
 import { E } from '@agoric/eventual-send';
-import Nat from '@agoric/nat';
+import { Nat } from '@agoric/nat';
 import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/multiaddr';
 import { assertProposalShape } from '@agoric/zoe/src/contractSupport';
 
-import '@agoric/notifier/exports';
+import '@agoric/notifier/exported';
 import '../exported';
 
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';
@@ -72,10 +72,10 @@ function makeICS20Converter(localBrand, prefixedDenom) {
    */
   function packetToLocalAmount(packet) {
     // packet.amount is a string in JSON.
-    const floatValue = Number(packet.amount);
+    const bigValue = BigInt(packet.amount);
 
     // If we overflow, or don't have a non-negative integer, throw an exception!
-    const value = Nat(floatValue);
+    const value = Nat(bigValue);
 
     return harden({
       brand: localBrand,

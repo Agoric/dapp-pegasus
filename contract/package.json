@@ -28,7 +28,7 @@
     "@agoric/ertp": "*",
     "@agoric/eventual-send": "*",
     "@agoric/install-ses": "*",
-    "@agoric/nat": "^2.0.1",
+    "@agoric/nat": "^4.0.0",
     "@agoric/notifier": "*",
     "@agoric/store": "*",
     "@agoric/swingset-vat": "*",
