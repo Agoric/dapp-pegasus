@@ -1,4 +1,4 @@
-import '@agoric/install-ses';
+import '@agoric/zoe/tools/prepare-test-env';
 import { test } from 'tape-promise/tape';
 
 import { E } from '@agoric/eventual-send';
