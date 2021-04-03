@@ -60,6 +60,7 @@ async function makeDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
 
 /**
  * Translate to and from local tokens.
+ *
  * @param {Brand} localBrand
  * @param {string} prefixedDenom
  */
@@ -96,6 +97,9 @@ function makeICS20Converter(localBrand, prefixedDenom) {
       brand === localBrand,
       details`Brand must our local issuer's, not ${q(brand)}`,
     );
+    // We're using Nat as a dynamic check in a way that tsc doesn't grok.
+    // Should Nat's parameter type be `unknown`?
+    // @ts-ignore
     const stringValue = String(Nat(value));
 
     // Generate the ics20-1 packet.
@@ -249,6 +253,7 @@ const makePegasus = (zcf, board) => {
   let lastLocalIssuerNonce = 0;
   /**
    * Create a new issuer keyword (based on Local + nonce)
+   *
    * @returns {string}
    */
   const createLocalIssuerKeyword = () => {
@@ -298,6 +303,7 @@ const makePegasus = (zcf, board) => {
     makeDenomUri,
     /**
      * Return a handler that can be used with the Network API.
+     *
      * @returns {ConnectionHandler}
      */
     makePegConnectionHandler() {
@@ -472,6 +478,7 @@ const makePegasus = (zcf, board) => {
 
       /**
        * Transfer amount (of localBrand and localAmountMath) from loser to winner seats.
+       *
        * @param {Amount} amount amount to transfer
        * @param {Keyword} loserKeyword the keyword to take from the loser
        * @param {ZCFSeat} loser seat to transfer from
@@ -531,6 +538,7 @@ const makePegasus = (zcf, board) => {
 
     /**
      * Find one of our registered issuers.
+     *
      * @param {Brand} localBrand
      * @returns {Promise<Issuer>}
      */
@@ -564,6 +572,7 @@ const makePegasus = (zcf, board) => {
 
       /**
        * Attempt the transfer, returning a refund if failed.
+       *
        * @type {OfferHandler}
        */
       const offerHandler = zcfSeat => {

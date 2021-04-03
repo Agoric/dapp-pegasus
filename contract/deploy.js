@@ -1,3 +1,4 @@
+/* global __filename */
 // @ts-check
 import fs from 'fs';
 import { E } from '@agoric/eventual-send';

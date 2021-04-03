@@ -1,5 +1,5 @@
-import '@agoric/zoe/tools/prepare-test-env';
-import { test } from 'tape-promise/tape';
+/* global __dirname */
+import { test } from '@agoric/swingset-vat/tools/prepare-test-env-ava';
 
 import { E } from '@agoric/eventual-send';
 import {
@@ -27,7 +27,7 @@ async function testRemotePeg(t) {
   let localDepositFacet;
   const board = harden({
     getValue(id) {
-      t.equals(id, '0x1234', 'got the deposit-only facet');
+      t.is(id, '0x1234', 'got the deposit-only facet');
       return localDepositFacet;
     },
   });
@@ -55,6 +55,7 @@ async function testRemotePeg(t) {
 
   /**
    * Pretend we're Gaia.
+   *
    * @type {import('@agoric/swingset-vat/src/vats/network').Connection?}
    */
   let gaiaConnection;
@@ -66,7 +67,7 @@ async function testRemotePeg(t) {
         },
         async onReceive(_c, packetBytes) {
           const packet = JSON.parse(packetBytes);
-          t.deepEquals(
+          t.deepEqual(
             packet,
             {
               amount: '100000000000000000001',
@@ -102,13 +103,13 @@ async function testRemotePeg(t) {
 
   const sendAckData = await E(gaiaConnection).send(JSON.stringify(sendPacket));
   const sendAck = JSON.parse(sendAckData);
-  t.deepEquals(sendAck, { success: true }, 'Gaia sent the atoms');
+  t.deepEqual(sendAck, { success: true }, 'Gaia sent the atoms');
   if (!sendAck.success) {
     console.log(sendAckData, sendAck.error);
   }
 
   const localAtomsAmount = await E(localPurseP).getCurrentAmount();
-  t.deepEquals(
+  t.deepEqual(
     localAtomsAmount,
     { brand: localBrand, value: 100000000000000000001n },
     'we received the shadow atoms',
@@ -117,7 +118,7 @@ async function testRemotePeg(t) {
   const localAtoms = await E(localPurseP).withdraw(localAtomsAmount);
 
   const allegedName = await E(pegP).getAllegedName();
-  t.equals(allegedName, 'Gaia', 'alleged peg name is equal');
+  t.is(allegedName, 'Gaia', 'alleged peg name is equal');
   const transferInvitation = await E(pegasus).makeInvitationToTransfer(
     pegP,
     'markaccount',
@@ -130,7 +131,7 @@ async function testRemotePeg(t) {
     harden({ Transfer: localAtoms }),
   );
   const outcome = await seat.getOfferResult();
-  t.equals(await outcome, undefined, 'transfer is successful');
+  t.is(await outcome, undefined, 'transfer is successful');
 
   const paymentPs = await seat.getPayouts();
   const refundAmount = await E(localIssuer).getAmountOf(paymentPs.Transfer);
@@ -145,4 +146,4 @@ async function testRemotePeg(t) {
 }
 
 test('remote peg', t =>
-  testRemotePeg(t).catch(err => t.isNot(err, err, 'unexpected exception')));
+  testRemotePeg(t).catch(err => t.not(err, err, 'unexpected exception')));

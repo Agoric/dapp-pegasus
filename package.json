@@ -10,17 +10,8 @@
     "_agstate/agoric-servers"
   ],
   "devDependencies": {
-    "eslint": "^6.8.0",
-    "eslint-config-airbnb": "^18.0.1",
-    "eslint-config-airbnb-base": "^14.0.0",
-    "eslint-config-jessie": "^0.0.6",
-    "eslint-config-prettier": "^6.9.0",
-    "eslint-plugin-import": "^2.20.0",
-    "eslint-plugin-jsx-a11y": "^6.2.3",
-    "eslint-plugin-prettier": "^3.1.2",
-    "eslint-plugin-react": "^7.18.0",
-    "eslint-plugin-react-hooks": "^2.3.0",
-    "prettier": "^1.18.2"
+    "@agoric/eslint-config": "*",
+    "ava": "^3.15.0"
   },
   "scripts": {
     "OFF-clean": "yarn workspaces run clean",
@@ -35,42 +26,5 @@
     "agoric": "*",
     "babel-eslint": ">=11.0.0-beta.2",
     "eslint-plugin-eslint-comments": "^3.1.2"
-  },
-  "eslintConfig": {
-    "extends": [
-      "airbnb-base",
-      "plugin:prettier/recommended"
-    ],
-    "env": {
-      "es6": true
-    },
-    "globals": {
-      "harden": "readonly"
-    },
-    "rules": {
-      "implicit-arrow-linebreak": "off",
-      "function-paren-newline": "off",
-      "arrow-parens": "off",
-      "strict": "off",
-      "no-console": "off",
-      "no-unused-vars": [
-        "error",
-        {
-          "argsIgnorePattern": "^_",
-          "varsIgnorePattern": "^_"
-        }
-      ],
-      "no-return-assign": "off",
-      "no-param-reassign": "off",
-      "no-restricted-syntax": [
-        "off",
-        "ForOfStatement"
-      ],
-      "no-unused-expressions": "off",
-      "no-loop-func": "off",
-      "no-inner-declarations": "off",
-      "import/no-extraneous-dependencies": "off",
-      "import/prefer-default-export": "off"
-    }
   }
 }
