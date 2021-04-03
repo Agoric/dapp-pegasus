@@ -1,3 +1,4 @@
+/* global __dirname */
 import { test } from '@agoric/swingset-vat/tools/prepare-test-env-ava';
 
 import { E } from '@agoric/eventual-send';
