@@ -2,9 +2,8 @@
 {
   "compilerOptions": {
     "target": "esnext",
-
     "noEmit": true,
-/*
+    /*
     // The following flags are for creating .d.ts files:
     "noEmit": false,
     "declaration": true,
@@ -14,8 +13,8 @@
     "strictNullChecks": true,
     "moduleResolution": "node",
   },
-}
   "include": [
     "src/**/*.js",
     "exported.js"
   ],
+}
