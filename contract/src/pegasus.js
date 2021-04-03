@@ -11,6 +11,7 @@ import { assertProposalShape } from '@agoric/zoe/src/contractSupport';
 
 import '@agoric/notifier/exported';
 import '../exported';
+import { BoardId } from './boardAddr';
 
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';
 const DEFAULT_PROTOCOL = 'ics20-1';
@@ -195,7 +196,7 @@ const makeCourier = ({
   /** @type {Receiver} */
   const receive = async packet => {
     // Look up the deposit facet for this board address, if there is one.
-    const depositAddress = packet.receiver;
+    const depositAddress = BoardId.fromBech32(packet.receiver);
     const depositFacet = await E(board).getValue(depositAddress);
     const localAmount = packetToLocalAmount(packet);
 

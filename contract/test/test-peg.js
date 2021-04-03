@@ -27,7 +27,7 @@ async function testRemotePeg(t) {
   let localDepositFacet;
   const board = harden({
     getValue(id) {
-      t.is(id, '0x1234', 'got the deposit-only facet');
+      t.is(id, 'board:1234', 'got the deposit-only facet');
       return localDepositFacet;
     },
   });
@@ -97,7 +97,7 @@ async function testRemotePeg(t) {
   const sendPacket = {
     amount: '100000000000000000001',
     denomination: 'portdef/chanabc/uatom',
-    receiver: '0x1234',
+    receiver: 'agboard1qnfq6ux7qx',
     sender: 'FIXME:sender',
   };
 
