@@ -38,6 +38,7 @@
     "@agoric/swingset-vat": "*",
     "@agoric/weak-store": "*",
     "@agoric/zoe": "*",
+    "@cosmjs/encoding": "^0.24.1",
     "esm": "^3.2.5"
   },
   "keywords": [],
