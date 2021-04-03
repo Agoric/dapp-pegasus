@@ -60,6 +60,7 @@ async function makeDenomUri(endpointP, denom, protocol = DEFAULT_PROTOCOL) {
 
 /**
  * Translate to and from local tokens.
+ *
  * @param {Brand} localBrand
  * @param {string} prefixedDenom
  */
@@ -250,6 +251,7 @@ const makePegasus = (zcf, board) => {
   let lastLocalIssuerNonce = 0;
   /**
    * Create a new issuer keyword (based on Local + nonce)
+   *
    * @returns {string}
    */
   const createLocalIssuerKeyword = () => {
@@ -299,6 +301,7 @@ const makePegasus = (zcf, board) => {
     makeDenomUri,
     /**
      * Return a handler that can be used with the Network API.
+     *
      * @returns {ConnectionHandler}
      */
     makePegConnectionHandler() {
@@ -473,6 +476,7 @@ const makePegasus = (zcf, board) => {
 
       /**
        * Transfer amount (of localBrand and localAmountMath) from loser to winner seats.
+       *
        * @param {Amount} amount amount to transfer
        * @param {Keyword} loserKeyword the keyword to take from the loser
        * @param {ZCFSeat} loser seat to transfer from
@@ -532,6 +536,7 @@ const makePegasus = (zcf, board) => {
 
     /**
      * Find one of our registered issuers.
+     *
      * @param {Brand} localBrand
      * @returns {Promise<Issuer>}
      */
@@ -565,6 +570,7 @@ const makePegasus = (zcf, board) => {
 
       /**
        * Attempt the transfer, returning a refund if failed.
+       *
        * @type {OfferHandler}
        */
       const offerHandler = zcfSeat => {

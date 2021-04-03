@@ -55,6 +55,7 @@ async function testRemotePeg(t) {
 
   /**
    * Pretend we're Gaia.
+   *
    * @type {import('@agoric/swingset-vat/src/vats/network').Connection?}
    */
   let gaiaConnection;
