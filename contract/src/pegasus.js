@@ -97,6 +97,8 @@ function makeICS20Converter(localBrand, prefixedDenom) {
       brand === localBrand,
       details`Brand must our local issuer's, not ${q(brand)}`,
     );
+    // We're using Nat as a dynamic check in a way that tsc doesn't grok.
+    // Should Nat's parameter type be `unknown`?
     // @ts-ignore
     const stringValue = String(Nat(value));
 
