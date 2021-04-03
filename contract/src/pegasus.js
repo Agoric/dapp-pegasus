@@ -96,6 +96,7 @@ function makeICS20Converter(localBrand, prefixedDenom) {
       brand === localBrand,
       details`Brand must our local issuer's, not ${q(brand)}`,
     );
+    // @ts-ignore
     const stringValue = String(Nat(value));
 
     // Generate the ics20-1 packet.
