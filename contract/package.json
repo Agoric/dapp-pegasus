@@ -19,7 +19,7 @@
     "@agoric/bundle-source": "*",
     "@agoric/eslint-config": "*",
     "@agoric/eslint-plugin": "*",
-    "@agoric/ses-ava": "^0.1.0",
+    "@agoric/ses-ava": "^0.1.1",
     "@agoric/swingset-vat": "*",
     "@typescript-eslint/parser": "^4.20.0",
     "ava": "^3.15.0",
