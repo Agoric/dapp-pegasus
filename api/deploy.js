@@ -6,6 +6,7 @@ import { E } from '@agoric/eventual-send';
 import installationConstants from '../ui.old/public/conf/installationConstants';
 
 import '@agoric/zoe/exported';
+import '@agoric/swingset-vat/exported';
 
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js
@@ -45,10 +46,11 @@ export default async function deployApi(
     zoe: untypedZoe,
 
     board,
+    namesByAddress,
     ibcport: untypedPorts,
   } = home;
 
-  /** @type {import('@agoric/swingset-vat/src/vats/network').Port[]} */
+  /** @type {Array<Port>} */
   const ibcport = untypedPorts;
 
   /** @type {ZoeService} */
@@ -65,7 +67,7 @@ export default async function deployApi(
   const { instance } = await E(zoe).startInstance(
     pegasusContractInstallationHandle,
     {},
-    { board },
+    { board, namesByAddress },
   );
   console.log('- SUCCESS! contract instance is running on Zoe');
 

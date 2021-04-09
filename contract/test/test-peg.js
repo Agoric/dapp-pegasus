@@ -8,7 +8,7 @@ import {
 } from '@agoric/swingset-vat/src/vats/network';
 
 import bundleSource from '@agoric/bundle-source';
-import { makeLocalAmountMath } from '@agoric/ertp';
+import { amountMath } from '@agoric/ertp';
 import { makeZoe } from '@agoric/zoe';
 
 import fakeVatAdmin from '@agoric/zoe/src/contractFacet/fakeVatAdmin';
@@ -19,15 +19,26 @@ const contractPath = `${__dirname}/../src/pegasus`;
  * @param {import('tape-promise/tape').Test} t
  */
 async function testRemotePeg(t) {
-  t.plan(8);
+  t.plan(13);
 
   /**
    * @type {import('@agoric/ertp').DepositFacet?}
    */
   let localDepositFacet;
-  const board = harden({
+  const fakeBoard = harden({
     getValue(id) {
-      t.is(id, '0x1234', 'got the deposit-only facet');
+      if (id === '0x1234') {
+        return localDepositFacet;
+      }
+      t.is(id, 'agoric1234567', 'tried bech32 first in board');
+      throw Error(`unrecognized board id ${id}`);
+    },
+  });
+  const fakeNamesByAddress = harden({
+    lookup(...keys) {
+      t.is(keys[0], 'agoric1234567', 'unrecognized fakeNamesByAddress');
+      t.is(keys[1], 'depositFacet', 'lookup not for the depositFacet');
+      t.is(keys.length, 2);
       return localDepositFacet;
     },
   });
@@ -41,7 +52,7 @@ async function testRemotePeg(t) {
   const { publicFacet: publicAPI } = await E(zoe).startInstance(
     installationHandle,
     {},
-    { board },
+    { board: fakeBoard, namesByAddress: fakeNamesByAddress },
   );
 
   /**
@@ -115,6 +126,27 @@ async function testRemotePeg(t) {
     'we received the shadow atoms',
   );
 
+  const sendPacket2 = {
+    amount: '170',
+    denomination: 'portdef/chanabc/uatom',
+    receiver: 'agoric1234567',
+    sender: 'FIXME:sender2',
+  };
+
+  const sendAckData2 = await E(gaiaConnection).send(JSON.stringify(sendPacket2));
+  const sendAck2 = JSON.parse(sendAckData2);
+  t.deepEqual(sendAck2, { success: true }, 'Gaia sent more atoms');
+  if (!sendAck2.success) {
+    console.log(sendAckData2, sendAck2.error);
+  }
+
+  const localAtomsAmount2 = await E(localPurseP).getCurrentAmount();
+  t.deepEqual(
+    localAtomsAmount2,
+    { brand: localBrand, value: 100000000000000000171n },
+    'we received more shadow atoms',
+  );
+
   const localAtoms = await E(localPurseP).withdraw(localAtomsAmount);
 
   const allegedName = await E(pegP).getAllegedName();
@@ -131,14 +163,12 @@ async function testRemotePeg(t) {
     harden({ Transfer: localAtoms }),
   );
   const outcome = await seat.getOfferResult();
-  t.is(await outcome, undefined, 'transfer is successful');
+  t.is(outcome, undefined, 'transfer is successful');
 
   const paymentPs = await seat.getPayouts();
   const refundAmount = await E(localIssuer).getAmountOf(paymentPs.Transfer);
 
-  const isEmptyRefund = await E(makeLocalAmountMath(localIssuer)).isEmpty(
-    refundAmount,
-  );
+  const isEmptyRefund = amountMath.isEmpty(refundAmount, localBrand);
   t.assert(isEmptyRefund, 'no refund from success');
 
   const stillIsLive = await E(localIssuer).isLive(localAtoms);
