@@ -10,6 +10,8 @@ import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/m
 import { assertProposalShape } from '@agoric/zoe/src/contractSupport';
 
 import '@agoric/notifier/exported';
+import '@agoric/cosmic-swingset/exported';
+import '@agoric/zoe/exported';
 import '../exported';
 
 const DEFAULT_AMOUNT_MATH_KIND = 'nat';
@@ -141,6 +143,7 @@ const sendTransferPacket = async (c, packet) => {
  * @property {ContractFacet} zcf
  * @property {Connection} connection
  * @property {BoardDepositFacet} board
+ * @property {NameHub} namesByAddress
  * @property {DenomUri} denomUri
  * @property {Brand} localBrand
  * @property {(zcfSeat: ZCFSeat, amounts: AmountKeywordRecord) => void} retain
@@ -152,6 +155,7 @@ const makeCourier = ({
   zcf,
   connection,
   board,
+  namesByAddress,
   denomUri,
   localBrand,
   retain,
@@ -196,7 +200,9 @@ const makeCourier = ({
   const receive = async packet => {
     // Look up the deposit facet for this board address, if there is one.
     const depositAddress = packet.receiver;
-    const depositFacet = await E(board).getValue(depositAddress);
+    /** @type {DepositFacet} */
+    const depositFacet = await E(board).getValue(depositAddress)
+      .catch(_ => E(namesByAddress).lookup(depositAddress, 'depositFacet'));
     const localAmount = packetToLocalAmount(packet);
 
     const { userSeat, zcfSeat } = zcf.makeEmptySeatKit();
@@ -232,9 +238,10 @@ const makeCourier = ({
  * Make a Pegasus public API.
  *
  * @param {ContractFacet} zcf the Zoe Contract Facet
- * @param {BoardDepositFacet} board where to find depositFacets
+ * @param {BoardDepositFacet} board where to find depositFacets by boardID
+ * @param {NameHub} namesByAddress where to find depositFacets by bech32
  */
-const makePegasus = (zcf, board) => {
+const makePegasus = (zcf, board, namesByAddress) => {
   /** @type {NotifierRecord<Peg[]>} */
   const { notifier, updater } = makeNotifierKit([]);
 
@@ -414,6 +421,7 @@ const makePegasus = (zcf, board) => {
         connection: c,
         localBrand,
         board,
+        namesByAddress,
         denomUri,
         retain: (zcfSeat, amounts) => zcfMint.burnLosses(amounts, zcfSeat),
         redeem: (zcfSeat, amounts) => {
@@ -510,6 +518,7 @@ const makePegasus = (zcf, board) => {
         zcf,
         connection: c,
         board,
+        namesByAddress,
         denomUri,
         localBrand,
         retain: (transferSeat, amounts) =>
@@ -593,10 +602,10 @@ const makePegasus = (zcf, board) => {
  * @type {ContractStartFn}
  */
 const start = zcf => {
-  const { board } = zcf.getTerms();
+  const { board, namesByAddress } = zcf.getTerms();
 
   return {
-    publicFacet: makePegasus(zcf, board),
+    publicFacet: makePegasus(zcf, board, namesByAddress),
   };
 };
 
