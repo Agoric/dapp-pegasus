@@ -8,13 +8,14 @@ import { E } from '@agoric/eventual-send';
 import { Nat } from '@agoric/nat';
 import { parse as parseMultiaddr } from '@agoric/swingset-vat/src/vats/network/multiaddr';
 import { assertProposalShape } from '@agoric/zoe/src/contractSupport';
+import { amountMath, MathKind } from '@agoric/ertp';
 
 import '@agoric/notifier/exported';
 import '@agoric/cosmic-swingset/exported';
 import '@agoric/zoe/exported';
 import '../exported';
 
-const DEFAULT_AMOUNT_MATH_KIND = 'nat';
+const DEFAULT_AMOUNT_MATH_KIND = MathKind.NAT;
 const DEFAULT_PROTOCOL = 'ics20-1';
 
 const TRANSFER_PROPOSAL_SHAPE = {
@@ -388,7 +389,7 @@ const makePegasus = (zcf, board, namesByAddress) => {
         )}; need Cosmos denomination format`,
       );
       assert(
-        amountMathKind === 'nat',
+        amountMathKind === MathKind.NAT,
         details`Unimplemented amountMathKind ${q(amountMathKind)}; need "nat"`,
       );
       assert(
@@ -481,11 +482,10 @@ const makePegasus = (zcf, board, namesByAddress) => {
       const localKeyword = createLocalIssuerKeyword();
       const {
         brand: localBrand,
-        amountMath: localAmountMath,
       } = await zcf.saveIssuer(localIssuer, localKeyword);
 
       /**
-       * Transfer amount (of localBrand and localAmountMath) from loser to winner seats.
+       * Transfer amount (of localBrand) from loser to winner seats.
        *
        * @param {Amount} amount amount to transfer
        * @param {Keyword} loserKeyword the keyword to take from the loser
@@ -506,8 +506,8 @@ const makePegasus = (zcf, board, namesByAddress) => {
           winnerKeyword,
           localBrand,
         );
-        const newLoser = localAmountMath.subtract(currentLoser, amount);
-        const newWinner = localAmountMath.add(currentWinner, amount);
+        const newLoser = amountMath.subtract(currentLoser, amount, localBrand);
+        const newWinner = amountMath.add(currentWinner, amount, localBrand);
         const loserStage = loser.stage({ [loserKeyword]: newLoser });
         const winnerStage = winner.stage({ [winnerKeyword]: newWinner });
         zcf.reallocate(loserStage, winnerStage);
