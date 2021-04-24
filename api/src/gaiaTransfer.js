@@ -1,8 +1,8 @@
 import { E } from '@agoric/eventual-send';
-import { makeDenomUri } from '../../contract/src/pegasus';
+import { makeDenomUri } from '@agoric/pegasus';
 
 /**
- * @typedef {import('../../contract/src/pegasus').FungibleTransferPacket} FungibleTransferPacket
+ * @typedef {import('@agoric/pegasus').FungibleTransferPacket} FungibleTransferPacket
  * @typedef {import('@agoric/swingset-vat/src/vats/network').Port} Port
  */
 
