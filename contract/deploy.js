@@ -1,4 +1,4 @@
-/* global __filename */
+/* global __filename, require */
 // @ts-check
 import fs from 'fs';
 import { E } from '@agoric/eventual-send';
@@ -49,7 +49,7 @@ export default async function deployContract(
   // and install it on Zoe. This returns an installationHandle, an
   // opaque, unforgeable identifier for our contract code that we can
   // reuse again and again to create new, live contract instances.
-  const bundle = await bundleSource(pathResolve(`./src/pegasus.js`));
+  const bundle = await bundleSource(require.resolve('@agoric/pegasus'));
   const installationHandle = await E(zoe).install(bundle);
 
   // Let's share this installationHandle with other people, so that
