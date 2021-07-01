@@ -26,5 +26,8 @@
     "agoric": "*",
     "babel-eslint": ">=11.0.0-beta.2",
     "eslint-plugin-eslint-comments": "^3.1.2"
+  },
+  "resolutions": {
+    "**/trim": "^0.0.3"
   }
 }
