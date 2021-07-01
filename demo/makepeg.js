@@ -6,7 +6,7 @@
 // issuer and purse to an individual wallet.
 
 import { E } from '@agoric/eventual-send';
-import dappConstants from '../ui.old/public/conf/defaults';
+import dappConstants from '../conf/defaults';
 
 import '@agoric/zoe/exported';
 import '@agoric/swingset-vat/src/vats/network/types';

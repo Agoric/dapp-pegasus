@@ -3,7 +3,7 @@
 
 import fs from 'fs';
 import { E } from '@agoric/eventual-send';
-import installationConstants from '../ui.old/public/conf/installationConstants';
+import installationConstants from '../conf/installationConstants';
 
 import '@agoric/zoe/exported';
 import '@agoric/swingset-vat/exported';
@@ -112,7 +112,7 @@ export default async function deployApi(
     BRIDGE_URL: 'http://127.0.0.1:8000',
     API_URL: 'http://127.0.0.1:8000',
   };
-  const defaultsFile = pathResolve(`../ui.old/public/conf/defaults.js`);
+  const defaultsFile = pathResolve(`../conf/defaults.js`);
   console.log('writing', defaultsFile);
   const defaultsContents = `\
 // GENERATED FROM ${__filename}
