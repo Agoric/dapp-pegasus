@@ -7,7 +7,7 @@
 
 import { E } from '@agoric/eventual-send';
 import { assert, details } from '@agoric/assert';
-import dappConstants from '../ui.old/public/conf/defaults';
+import dappConstants from '../conf/defaults';
 
 // deploy.js runs in an ephemeral Node.js outside of swingset. The
 // spawner runs within ag-solo, so is persistent.  Once the deploy.js

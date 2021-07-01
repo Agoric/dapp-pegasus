@@ -74,9 +74,7 @@ export default async function deployContract(
     CONTRACT_NAME,
     INSTALLATION_BOARD_ID,
   };
-  const defaultsFile = pathResolve(
-    `../ui.old/public/conf/installationConstants.js`,
-  );
+  const defaultsFile = pathResolve(`../conf/installationConstants.js`);
   console.log('writing', defaultsFile);
   const defaultsContents = `\
 // GENERATED FROM ${__filename}
